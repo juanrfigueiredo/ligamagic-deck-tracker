@@ -49,6 +49,8 @@ go test ./...
 
 ### 1. Turso
 
+Instale a CLI (`curl -sSfL https://get.tur.so/install.sh | bash`) e entre com `turso auth login`.
+
 ```bash
 turso db create ligamagic-tracker --location aws-us-east-1
 turso db show ligamagic-tracker --url        # TURSO_DATABASE_URL
@@ -60,14 +62,15 @@ As tabelas são criadas sozinhas quando o servidor inicia.
 ### 2. Resend
 
 1. Adicione o domínio `jrfsoftware.com.br` em Domains.
-2. Crie no Registro.br os registros DNS que o Resend mostrar.
-3. Crie uma API key (`RESEND_API_KEY`).
+2. Crie no Registro.br (DNS, modo avançado) os registros que o Resend mostrar: o TXT `resend._domainkey` (DKIM) e o MX e o TXT do subdomínio `send` (SPF). Eles não interferem no e-mail que você já usa no domínio.
+3. Espere o domínio ficar "Verified" e crie uma API key com permissão "Sending access" só para esse domínio (`RESEND_API_KEY`).
 
 ### 3. Render
 
 1. New, depois Blueprint, e escolha este repositório. O Render lê o `render.yaml`.
 2. Preencha `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` e `RESEND_API_KEY`. O `SECRET_KEY` é gerado automaticamente.
-3. Em Settings, Custom Domains, adicione `mtg.jrfsoftware.com.br` e crie o CNAME que ele pedir no Registro.br.
+3. Em Settings, Custom Domains, adicione `mtg.jrfsoftware.com.br`. No Registro.br, crie o CNAME `mtg` apontando para o endereço `*.onrender.com` do serviço. O certificado HTTPS sai sozinho depois da verificação.
+4. Teste `https://mtg.jrfsoftware.com.br/healthz` (deve responder `ok`).
 
 O plano free dorme depois de 15 minutos sem uso. O primeiro acesso depois disso demora uns 30 a 60 segundos.
 
@@ -85,7 +88,7 @@ Para usar outro servidor (por exemplo `http://localhost:8080` ou a URL `*.onrend
 |---|---|---|
 | `TURSO_DATABASE_URL` | `file:local.db` | `libsql://...` em produção |
 | `TURSO_AUTH_TOKEN` | | token do Turso |
-| `RESEND_API_KEY` | | sem ela, o e-mail vai para o log |
+| `RESEND_API_KEY` | | obrigatória em produção; localmente, sem ela o código vai para o log |
 | `MAIL_FROM` | `LigaMagic Deck Tracker <noreply@jrfsoftware.com.br>` | remetente |
 | `SECRET_KEY` | `dev-secret` (só local) | HMAC dos códigos de login |
 | `BASE_URL` | `http://localhost:8080` | link nos e-mails |

@@ -29,6 +29,9 @@ func main() {
 		}
 		secret = "dev-secret"
 	}
+	if os.Getenv("RESEND_API_KEY") == "" && !strings.HasPrefix(dbURL, "file:") {
+		log.Fatal("RESEND_API_KEY é obrigatório em produção")
+	}
 
 	db, err := app.OpenDB(dbURL, os.Getenv("TURSO_AUTH_TOKEN"))
 	if err != nil {
