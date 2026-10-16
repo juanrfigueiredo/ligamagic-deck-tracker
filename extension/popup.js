@@ -20,7 +20,7 @@ async function init() {
   const m = tab?.url?.match(/ligamagic\.com\.br\/\?.*view=dks\/deck.*[?&]id=(\d+)/);
   if (m) $("deck").value = m[1];
 
-  if (!s.token) {
+  if (!s.loggedIn) {
     // O popup fecha quando você vai ler o e-mail; o e-mail pendente fica salvo.
     const { pendingEmail } = await chrome.storage.local.get("pendingEmail");
     if (pendingEmail) {
@@ -29,8 +29,10 @@ async function init() {
     }
     return show("login");
   }
+  const me = await api("GET", "/api/me");
+  if (!me.ok) return show("login");
   show("main");
-  $("who").textContent = s.email;
+  $("who").textContent = me.data.email;
   loadDecks();
 }
 
@@ -71,7 +73,6 @@ $("sendCode").onclick = async () => {
 $("verify").onclick = async () => {
   const r = await api("POST", "/api/auth/verify", { email: $("email").value, code: $("code").value });
   if (!r.ok) return msg(r.data.error);
-  await chrome.storage.local.set({ token: r.data.token, email: r.data.email });
   await chrome.storage.local.remove("pendingEmail");
   msg("");
   init();
@@ -79,7 +80,6 @@ $("verify").onclick = async () => {
 
 $("logout").onclick = async () => {
   await api("POST", "/api/auth/logout");
-  await chrome.storage.local.remove(["token", "email"]);
   show("login");
 };
 
@@ -94,6 +94,8 @@ $("openSite").onclick = async () => {
   const s = await chrome.runtime.sendMessage({ type: "settings" });
   chrome.tabs.create({ url: s.apiBase });
 };
+
+$("loginSite").onclick = () => chrome.runtime.sendMessage({ type: "openLogin" });
 
 $("saveApi").onclick = async () => {
   const v = $("apiBase").value.trim().replace(/\/$/, "");

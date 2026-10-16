@@ -12,7 +12,7 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 
 ## Funcionalidades
 
-- **Login sem senha:** você digita o e-mail e recebe um código de 6 dígitos, válido por 10 minutos e de uso único. O token dura 30 dias.
+- **Login sem senha:** você digita o e-mail e recebe um código de 6 dígitos, válido por 10 minutos e de uso único. O token dura 30 dias. Site e extensão usam a mesma sessão (o cookie do site): entrar ou sair em um vale para os dois.
 - **Acompanhar decks:** pela URL ou pelo ID, no site ou na extensão. A extensão também mostra um botão "Acompanhar" quando você abre um deck que ainda não segue.
 - **Snapshots:** no máximo 1 por deck por dia (horário de Brasília). Abrir o deck de novo no mesmo dia só atualiza o snapshot do dia.
 - **Histórico compartilhado:** quem acompanha o mesmo deck vê o mesmo histórico.

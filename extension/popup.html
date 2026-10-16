@@ -22,13 +22,14 @@
   <h1>MTG Tracker</h1>
 
   <section id="login" class="hidden">
-    <p class="muted">Digite seu e-mail para receber um código de uso único.</p>
+    <p class="muted">Se você já entrou no site, é só abrir este popup de novo. Ou digite seu e-mail para receber um código.</p>
     <input type="email" id="email" placeholder="voce@email.com">
     <button id="sendCode">Enviar código</button>
     <div id="codeBox" class="hidden">
       <input type="text" id="code" placeholder="Código de 6 dígitos" maxlength="6" inputmode="numeric">
       <button id="verify">Entrar</button>
     </div>
+    <p><button class="ghost" id="loginSite">Entrar pelo site</button></p>
   </section>
 
   <section id="main" class="hidden">

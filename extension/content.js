@@ -97,7 +97,9 @@
 
   const st = await api("GET", `/api/decks/${deckId}/status`);
   if (st.status === 401) {
-    badge("Entre na extensão (ícone na barra do Chrome) para acompanhar este deck.");
+    badge("Entre para acompanhar este deck. Depois, recarregue esta página.", [
+      ["Entrar", () => chrome.runtime.sendMessage({ type: "openLogin" })],
+    ]);
     return;
   }
   if (!st.ok) return;
