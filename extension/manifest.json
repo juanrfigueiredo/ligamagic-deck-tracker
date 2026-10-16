@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "MTG Tracker (LigaMagic)",
+  "version": "0.1.0",
+  "description": "Salva o histórico de preço dos seus decks quando você abre eles na LigaMagic.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://mtg.jrfsoftware.com.br/*",
+    "https://*.onrender.com/*",
+    "http://localhost:8080/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.ligamagic.com.br/*", "https://ligamagic.com.br/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "MTG Tracker" }
+}

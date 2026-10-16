@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 340px; margin: 0; padding: 14px; font: 14px/1.4 system-ui, sans-serif; color: #1d2330; }
+  h1 { font-size: 16px; margin: 0 0 10px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px 10px; margin: 4px 0; border: 1px solid #ccd; border-radius: 6px; font: inherit; }
+  button { padding: 7px 12px; border: 0; border-radius: 6px; background: #2f6fde; color: #fff; cursor: pointer; font: inherit; }
+  button.ghost { background: transparent; color: #667; border: 1px solid #ccd; }
+  .muted { color: #667; font-size: 12px; }
+  .err { color: #c0392b; margin-top: 6px; } .ok { color: #1e8e4f; margin-top: 6px; }
+  ul { list-style: none; padding: 0; margin: 8px 0; max-height: 220px; overflow: auto; }
+  li { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 8px; }
+  li a { color: #1d2330; text-decoration: none; } li a:hover { text-decoration: underline; }
+  .row { display: flex; gap: 6px; align-items: center; } .row input { flex: 1; }
+  .hidden { display: none; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: #667; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>MTG Tracker</h1>
+
+  <section id="login" class="hidden">
+    <p class="muted">Digite seu e-mail para receber um código de uso único.</p>
+    <input type="email" id="email" placeholder="voce@email.com">
+    <button id="sendCode">Enviar código</button>
+    <div id="codeBox" class="hidden">
+      <input type="text" id="code" placeholder="Código de 6 dígitos" maxlength="6" inputmode="numeric">
+      <button id="verify">Entrar</button>
+    </div>
+  </section>
+
+  <section id="main" class="hidden">
+    <div class="row"><span class="muted" id="who"></span><button class="ghost" id="logout">Sair</button></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="deck" placeholder="URL ou ID do deck"><button id="add">Acompanhar</button></div>
+    <ul id="decks"></ul>
+    <button class="ghost" id="openSite">Abrir site com gráficos</button>
+  </section>
+
+  <div id="msg"></div>
+
+  <details>
+    <summary>Configurações</summary>
+    <input type="text" id="apiBase" placeholder="https://mtg.jrfsoftware.com.br">
+    <button class="ghost" id="saveApi">Salvar servidor</button>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>
