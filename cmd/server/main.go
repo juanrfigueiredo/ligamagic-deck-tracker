@@ -48,6 +48,7 @@ func main() {
 
 	mailer := app.NewResend(os.Getenv("RESEND_API_KEY"), env("MAIL_FROM", "LigaMagic Deck Tracker <noreply@jrfsoftware.com.br>"))
 	a := app.New(db, mailer, secret, env("BASE_URL", "http://localhost:8080"))
+	a.SetAdmins(env("ADMIN_EMAILS", "juanrfigueiredo@gmail.com"))
 	go a.Cleanup(ctx)
 
 	srv := &http.Server{

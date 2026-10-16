@@ -3,5 +3,5 @@ package extension
 
 import "embed"
 
-//go:embed manifest.json *.js popup.html
+//go:embed manifest.json *.js popup.html icons/*.png
 var Files embed.FS

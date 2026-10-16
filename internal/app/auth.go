@@ -247,5 +247,5 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request, u user) {
 }
 
 func (a *App) handleMe(w http.ResponseWriter, r *http.Request, u user) {
-	writeJSON(w, http.StatusOK, map[string]any{"email": u.Email})
+	writeJSON(w, http.StatusOK, map[string]any{"email": u.Email, "admin": a.isAdmin(u)})
 }

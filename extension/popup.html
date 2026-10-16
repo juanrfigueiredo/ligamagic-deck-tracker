@@ -6,7 +6,7 @@
   body { width: 340px; margin: 0; padding: 14px; font: 14px/1.4 system-ui, sans-serif; color: #1d2330; }
   h1 { font-size: 16px; margin: 0 0 10px; }
   input { width: 100%; box-sizing: border-box; padding: 8px 10px; margin: 4px 0; border: 1px solid #ccd; border-radius: 6px; font: inherit; }
-  button { padding: 7px 12px; border: 0; border-radius: 6px; background: #f1601d; color: #1a0c05; font-weight: 600; cursor: pointer; font: inherit; }
+  button { padding: 7px 12px; border: 0; border-radius: 6px; background: #2f6fde; color: #fff; font-weight: 600; cursor: pointer; font: inherit; }
   button.ghost { background: transparent; color: #667; border: 1px solid #ccd; }
   .muted { color: #667; font-size: 12px; }
   .err { color: #c0392b; margin-top: 6px; } .ok { color: #1e8e4f; margin-top: 6px; }
@@ -15,6 +15,9 @@
   li a { color: #1d2330; text-decoration: none; } li a:hover { text-decoration: underline; }
   .row { display: flex; gap: 6px; align-items: center; } .row input { flex: 1; }
   .hidden { display: none; }
+  .st { font-size: 12px; white-space: nowrap; } .st.ok { color: #1e8e4f; } .st.pend { color: #b45309; }
+  .right { display: flex; gap: 8px; align-items: center; }
+  label.chk { display: flex; gap: 6px; align-items: center; font-size: 13px; margin: 8px 0; }
   details { margin-top: 10px; } summary { cursor: pointer; color: #667; font-size: 12px; }
 </style>
 </head>
@@ -35,6 +38,7 @@
   <section id="main" class="hidden">
     <div class="row"><span class="muted" id="who"></span><button class="ghost" id="logout">Sair</button></div>
     <div class="row" style="margin-top:8px"><input type="text" id="deck" placeholder="URL ou ID do deck"><button id="add">Acompanhar</button></div>
+    <div class="row" style="margin-top:10px;justify-content:space-between"><span class="muted" id="summary"></span><button class="ghost" id="collect">Coletar agora</button></div>
     <ul id="decks"></ul>
     <button class="ghost" id="openSite">Abrir site com gráficos</button>
   </section>
@@ -43,6 +47,7 @@
 
   <details>
     <summary>Configurações</summary>
+    <label class="chk"><input type="checkbox" id="autoCollect"> Coletar sozinho uma vez por dia (abre os decks pendentes numa janela minimizada)</label>
     <input type="text" id="apiBase" placeholder="https://mtg.jrfsoftware.com.br">
     <button class="ghost" id="saveApi">Salvar servidor</button>
   </details>

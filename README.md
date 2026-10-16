@@ -18,6 +18,13 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 - **Histórico compartilhado:** quem acompanha o mesmo deck vê o mesmo histórico.
 - **Gráficos:** do total do deck e de cada carta, com a variação em relação ao dia anterior.
 - **Transferência:** passa os decks para outro e-mail, copiando ou movendo.
+- **Coleta automática:** uma vez por hora, com o Chrome aberto, a extensão abre numa janela minimizada os decks que ainda não têm o preço do dia (cada deck é tentado no máximo uma vez por dia). O ícone mostra quantos faltam.
+- **Página do deck:** período do gráfico (30 dias, 90 dias, tudo), maiores altas e baixas, busca e ordenação de cartas e exportação em CSV.
+- **Alertas:** e-mail quando o preço médio do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
+- **Link público:** somente leitura, sem login; pode ser desativado a qualquer momento.
+- **Conta:** baixar todos os dados guardados (JSON) e excluir a conta.
+- **Painel de uso:** para os e-mails em `ADMIN_EMAILS`, em `#/admin`.
+- **App no celular (PWA):** o site pode ser instalado na tela inicial. Ele avisa no computador quando a extensão não está instalada ou está desatualizada.
 
 ## Estrutura
 
@@ -82,6 +89,8 @@ O site oferece a extensão em **Extensão** (`/#/extensao`), com o zip em `/exte
 2. Clique em "Carregar sem compactação" e escolha a pasta `mtg-tracker` (ou `extension/`, se estiver com o repositório).
 3. Clique no ícone da extensão, entre com seu e-mail e abra um deck na LigaMagic.
 
+Para publicar na Chrome Web Store (instalação com um clique e atualização automática), os ícones já estão em `extension/icons/`: basta enviar o zip de `/extensao.zip` no [painel de desenvolvedor](https://chrome.google.com/webstore/devconsole) (taxa única de US$ 5).
+
 Para usar outro servidor (por exemplo `http://localhost:8080` ou a URL `*.onrender.com`), troque em Configurações, no popup. Um domínio novo também precisa entrar em `host_permissions` no `extension/manifest.json`.
 
 ## Variáveis de ambiente
@@ -93,12 +102,13 @@ Para usar outro servidor (por exemplo `http://localhost:8080` ou a URL `*.onrend
 | `RESEND_API_KEY` | | obrigatória em produção; localmente, sem ela o código vai para o log |
 | `MAIL_FROM` | `LigaMagic Deck Tracker <noreply@jrfsoftware.com.br>` | remetente |
 | `SECRET_KEY` | `dev-secret` (só local) | HMAC dos códigos de login |
+| `ADMIN_EMAILS` | `juanrfigueiredo@gmail.com` | e-mails, separados por vírgula, que veem o painel de uso |
 | `BASE_URL` | `http://localhost:8080` | link nos e-mails |
 | `PORT` | `8080` | |
 
 ## API
 
-Toda rota, exceto `/api/auth/request` e `/api/auth/verify`, exige `Authorization: Bearer <token>` ou o cookie de sessão.
+Toda rota, exceto `/api/auth/request`, `/api/auth/verify`, `/api/extension` e `/api/public/...`, exige `Authorization: Bearer <token>` ou o cookie de sessão.
 
 | Método | Rota | |
 |---|---|---|
@@ -114,7 +124,16 @@ Toda rota, exceto `/api/auth/request` e `/api/auth/verify`, exige `Authorization
 | GET | `/api/decks/{id}/history` | total por dia |
 | GET | `/api/decks/{id}/cards` | cartas do último snapshot |
 | GET | `/api/decks/{id}/card-history?key=` | histórico de uma carta |
+| PUT | `/api/decks/{id}/alert` | `{pct: 1..100 \| null}` |
+| POST | `/api/decks/{id}/share` | cria (ou devolve) o link público |
+| DELETE | `/api/decks/{id}/share` | desativa o link público |
+| GET | `/api/decks/{id}/export.csv` | histórico em CSV (`;` e vírgula decimal) |
+| GET | `/api/public/{token}/history`, `/cards`, `/card-history`, `/export.csv` | link público, sem login |
 | POST | `/api/transfer` | `{email, mode: "copy"\|"move", deck_ids?}` |
+| GET | `/api/me/export` | todos os dados da conta (JSON) |
+| DELETE | `/api/me` | `{confirm: "<seu e-mail>"}` exclui a conta |
+| GET | `/api/admin/stats` | painel de uso (só admin) |
+| GET | `/api/extension` | versão atual da extensão |
 
 Preços sempre em centavos. `null` significa sem oferta no dia.
 

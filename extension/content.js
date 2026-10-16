@@ -63,7 +63,7 @@
         .b { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; max-width: 300px; padding: 12px 14px;
              background: #1d2330; color: #fff; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
         .t { font-weight: 600; margin-bottom: 4px; }
-        button { margin-top: 8px; margin-right: 6px; padding: 6px 10px; border: 0; border-radius: 6px; background: #f1601d; color: #1a0c05; font-weight: 600; cursor: pointer; font: inherit; }
+        button { margin-top: 8px; margin-right: 6px; padding: 6px 10px; border: 0; border-radius: 6px; background: #2f6fde; color: #fff; font-weight: 600; cursor: pointer; font: inherit; }
         button.x { background: transparent; color: #aab; }
       </style>
       <div class="b"><div class="t">MTG Tracker</div><div>${html}</div><div class="btns"></div></div>`;
@@ -80,33 +80,49 @@
 
   const fmt = (c) => (c == null ? "—" : (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 
+  // A página pode demorar a mostrar os preços (ou passar antes pelo desafio do Cloudflare): tenta por até 10s.
+  async function readDeck() {
+    for (let i = 0; i < 10; i++) {
+      const snap = parseDeck();
+      if (snap && snap.cards.length && snap.totals.avg != null) return snap;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return parseDeck();
+  }
+
+  const auto = await chrome.runtime.sendMessage({ type: "isAutoTab" }).catch(() => false);
+  const done = (ok) => chrome.runtime.sendMessage({ type: "deckDone", deckId, ok }).catch(() => {});
+  const notice = (html, buttons) => (auto ? null : badge(html, buttons));
+
   async function sendSnapshot() {
-    const snap = parseDeck();
+    const snap = await readDeck();
     if (!snap || !snap.cards.length) {
-      badge("Não consegui ler os preços desta página. O layout da LigaMagic pode ter mudado.");
-      return;
+      notice("Não consegui ler os preços desta página. O layout da LigaMagic pode ter mudado.");
+      return done(false);
     }
     const r = await api("POST", `/api/decks/${deckId}/snapshot`, snap);
     if (r.ok) {
-      const host = badge(`Preço de hoje salvo: <b>${fmt(snap.totals.avg)}</b> (médio), ${r.data.cards} cartas.`);
-      setTimeout(() => host.remove(), 6000);
+      const host = notice(`Preço de hoje salvo: <b>${fmt(snap.totals.avg)}</b> (médio), ${r.data.cards} cartas.`);
+      if (host) setTimeout(() => host.remove(), 6000);
     } else {
-      badge("Erro ao salvar: " + (r.data.error || r.status));
+      notice("Erro ao salvar: " + (r.data.error || r.status));
     }
+    done(r.ok);
   }
 
   const st = await api("GET", `/api/decks/${deckId}/status`);
   if (st.status === 401) {
-    badge("Entre para acompanhar este deck. Depois, recarregue esta página.", [
+    notice("Entre para acompanhar este deck. Depois, recarregue esta página.", [
       ["Entrar", () => chrome.runtime.sendMessage({ type: "openLogin" })],
     ]);
-    return;
+    return done(false);
   }
-  if (!st.ok) return;
+  if (!st.ok) return done(false);
   if (st.data.tracked) {
     await sendSnapshot();
   } else {
-    badge("Este deck não está sendo acompanhado.", [
+    done(false);
+    notice("Este deck não está sendo acompanhado.", [
       ["Acompanhar", async () => {
         const r = await api("POST", "/api/decks", { deck: deckId, name: parseDeck()?.name || "" });
         if (r.ok) await sendSnapshot();

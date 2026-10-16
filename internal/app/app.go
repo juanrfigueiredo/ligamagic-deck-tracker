@@ -25,6 +25,7 @@ type App struct {
 	baseURL string
 	loc     *time.Location
 	now     func() time.Time
+	admins  map[string]bool
 }
 
 func New(db *sql.DB, mail Sender, secret, baseURL string) *App {
@@ -43,6 +44,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/verify", a.handleVerify)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.handleLogout))
 	mux.HandleFunc("GET /api/me", a.auth(a.handleMe))
+	mux.HandleFunc("GET /api/me/export", a.auth(a.handleExportAccount))
+	mux.HandleFunc("DELETE /api/me", a.auth(a.handleDeleteAccount))
+	mux.HandleFunc("GET /api/admin/stats", a.auth(a.handleAdminStats))
 
 	mux.HandleFunc("GET /api/decks", a.auth(a.handleListDecks))
 	mux.HandleFunc("POST /api/decks", a.auth(a.handleAddDeck))
@@ -53,7 +57,18 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/decks/{id}/cards", a.auth(a.tracked(a.handleDeckCards)))
 	mux.HandleFunc("GET /api/decks/{id}/card-history", a.auth(a.tracked(a.handleCardHistory)))
 
+	mux.HandleFunc("PUT /api/decks/{id}/alert", a.auth(a.tracked(a.handleSetAlert)))
+	mux.HandleFunc("POST /api/decks/{id}/share", a.auth(a.tracked(a.handleShareCreate)))
+	mux.HandleFunc("DELETE /api/decks/{id}/share", a.auth(a.tracked(a.handleShareDelete)))
+	mux.HandleFunc("GET /api/decks/{id}/export.csv", a.auth(a.tracked(a.handleExportCSV)))
+
+	mux.HandleFunc("GET /api/public/{token}/history", a.public(a.handleDeckHistory))
+	mux.HandleFunc("GET /api/public/{token}/cards", a.public(a.handleDeckCards))
+	mux.HandleFunc("GET /api/public/{token}/card-history", a.public(a.handleCardHistory))
+	mux.HandleFunc("GET /api/public/{token}/export.csv", a.public(a.handleExportCSV))
+
 	mux.HandleFunc("POST /api/transfer", a.auth(a.handleTransfer))
+	mux.HandleFunc("GET /api/extension", a.handleExtensionInfo)
 	mux.HandleFunc("GET /extensao.zip", a.handleExtensionZip)
 
 	sub, _ := fs.Sub(webFS, "web")

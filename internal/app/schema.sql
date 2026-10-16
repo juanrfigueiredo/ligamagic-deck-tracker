@@ -70,3 +70,21 @@ CREATE TABLE IF NOT EXISTS snapshot_cards (
   PRIMARY KEY (snapshot_id, board, card_key)
 );
 CREATE INDEX IF NOT EXISTS idx_snapshot_cards_card ON snapshot_cards (card_key);
+
+-- Alerta por e-mail quando o preço médio do deck varia pct% ou mais em relação ao snapshot anterior.
+CREATE TABLE IF NOT EXISTS alerts (
+  user_id       INTEGER NOT NULL,
+  deck_id       INTEGER NOT NULL,
+  pct           INTEGER NOT NULL,
+  last_sent_day TEXT,
+  PRIMARY KEY (user_id, deck_id)
+);
+
+-- Link público, somente leitura, de um deck.
+CREATE TABLE IF NOT EXISTS shares (
+  token      TEXT    PRIMARY KEY,
+  deck_id    INTEGER NOT NULL,
+  user_id    INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_user_deck ON shares (user_id, deck_id);

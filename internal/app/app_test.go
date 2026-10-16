@@ -12,14 +12,24 @@ import (
 	"testing"
 )
 
-type fakeMail struct{ last string }
+type fakeMail struct {
+	last, lastTo, lastSubject string
+	sent                      int
+}
 
 func (f *fakeMail) Send(_ context.Context, to, subject, text, html string) error {
-	f.last = text
+	f.last, f.lastTo, f.lastSubject = text, to, subject
+	f.sent++
 	return nil
 }
 
 func setup(t *testing.T) (*httptest.Server, *fakeMail) {
+	t.Helper()
+	srv, m, _ := setupApp(t)
+	return srv, m
+}
+
+func setupApp(t *testing.T) (*httptest.Server, *fakeMail, *App) {
 	t.Helper()
 	db, err := OpenDB("file:"+filepath.Join(t.TempDir(), "test.db"), "")
 	if err != nil {
@@ -29,9 +39,10 @@ func setup(t *testing.T) (*httptest.Server, *fakeMail) {
 		t.Fatal(err)
 	}
 	m := &fakeMail{}
-	srv := httptest.NewServer(New(db, m, "test", "http://x").Routes())
+	a := New(db, m, "test", "http://x")
+	srv := httptest.NewServer(a.Routes())
 	t.Cleanup(func() { srv.Close(); db.Close() })
-	return srv, m
+	return srv, m, a
 }
 
 func do(t *testing.T, srv *httptest.Server, method, path, token string, body any) (int, map[string]any) {
@@ -184,7 +195,7 @@ func TestExtensionZip(t *testing.T) {
 	for _, f := range zr.File {
 		names[f.Name] = true
 	}
-	for _, n := range []string{"manifest.json", "background.js", "content.js", "popup.html", "popup.js"} {
+	for _, n := range []string{"manifest.json", "background.js", "content.js", "popup.html", "popup.js", "site.js", "icons/128.png"} {
 		if !names["mtg-tracker/"+n] {
 			t.Errorf("zip sem %s: %v", n, names)
 		}

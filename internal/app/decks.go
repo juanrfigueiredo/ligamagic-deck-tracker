@@ -46,6 +46,8 @@ type deckSummary struct {
 	TotalAvg *int64 `json:"total_avg"`
 	TotalMax *int64 `json:"total_max"`
 	PrevAvg  *int64 `json:"prev_avg"`
+	// SnapshotToday indica se o preço de hoje já foi salvo (a extensão usa para a coleta automática).
+	SnapshotToday bool `json:"snapshot_today"`
 }
 
 // GET /api/decks
@@ -64,6 +66,7 @@ func (a *App) handleListDecks(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	defer rows.Close()
 	out := []deckSummary{}
+	today := a.today()
 	for rows.Next() {
 		var d deckSummary
 		var day sql.NullString
@@ -72,7 +75,7 @@ func (a *App) handleListDecks(w http.ResponseWriter, r *http.Request, u user) {
 			serverErr(w, err)
 			return
 		}
-		d.URL, d.LastDay = deckURL(d.ID), day.String
+		d.URL, d.LastDay, d.SnapshotToday = deckURL(d.ID), day.String, day.String == today
 		d.TotalMin, d.TotalAvg, d.TotalMax, d.PrevAvg = nullPtr(mn), nullPtr(av), nullPtr(mx), nullPtr(prev)
 		out = append(out, d)
 	}
@@ -122,11 +125,29 @@ func (a *App) handleRemoveDeck(w http.ResponseWriter, r *http.Request, u user) {
 		writeErr(w, http.StatusBadRequest, "ID de deck inválido.")
 		return
 	}
-	if _, err := a.db.ExecContext(r.Context(), `DELETE FROM user_decks WHERE user_id = ? AND deck_id = ?`, u.ID, id); err != nil {
+	if err := a.untrack(r.Context(), a.db, u.ID, id); err != nil {
 		serverErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// untrack tira o deck da conta junto com o alerta e o link público dele.
+func (a *App) untrack(ctx context.Context, db execer, uid, deckID int64) error {
+	for _, q := range []string{
+		`DELETE FROM user_decks WHERE user_id = ? AND deck_id = ?`,
+		`DELETE FROM alerts WHERE user_id = ? AND deck_id = ?`,
+		`DELETE FROM shares WHERE user_id = ? AND deck_id = ?`,
+	} {
+		if _, err := db.ExecContext(ctx, q, uid, deckID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GET /api/decks/{id}/status -> usado pela extensão
@@ -321,6 +342,7 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 		serverErr(w, err)
 		return
 	}
+	a.checkAlerts(ctx, id)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "day": a.today(), "cards": len(order)})
 }
 
@@ -359,7 +381,19 @@ func (a *App) handleDeckHistory(w http.ResponseWriter, r *http.Request, u user, 
 		p.Min, p.Avg, p.Max = nullPtr(mn), nullPtr(av), nullPtr(mx)
 		pts = append(pts, p)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "name": name, "url": deckURL(id), "points": pts})
+	out := map[string]any{"id": id, "name": name, "url": deckURL(id), "points": pts}
+	if u.ID != 0 { // só o dono vê o alerta e o link público; o link público não expõe nada da conta
+		var pct sql.NullInt64
+		var token sql.NullString
+		a.db.QueryRowContext(r.Context(), `SELECT pct FROM alerts WHERE user_id = ? AND deck_id = ?`, u.ID, id).Scan(&pct)
+		a.db.QueryRowContext(r.Context(), `SELECT token FROM shares WHERE user_id = ? AND deck_id = ?`, u.ID, id).Scan(&token)
+		out["alert_pct"] = nullPtr(pct)
+		out["share_url"] = nil
+		if token.Valid {
+			out["share_url"] = a.shareURL(token.String)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 type cardRow struct {
@@ -525,7 +559,7 @@ func (a *App) handleTransfer(w http.ResponseWriter, r *http.Request, u user) {
 			return
 		}
 		if in.Mode == "move" {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM user_decks WHERE user_id = ? AND deck_id = ?`, u.ID, id); err != nil {
+			if err := a.untrack(ctx, tx, u.ID, id); err != nil {
 				serverErr(w, err)
 				return
 			}
