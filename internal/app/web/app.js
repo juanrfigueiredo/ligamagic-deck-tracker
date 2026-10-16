@@ -25,6 +25,8 @@ async function api(method, path, body) {
   return data;
 }
 
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
 function change(cur, prev) {
   if (cur == null || prev == null || prev === 0) return '<span class="muted">—</span>';
   const pct = ((cur - prev) / prev) * 100;
@@ -43,7 +45,7 @@ function lineChart(canvas, points) {
   const color = (v) => css.getPropertyValue(v).trim();
   const ds = (label, key, v) => ({
     label, data: points.map((p) => (p[key] == null ? null : p[key] / 100)),
-    borderColor: color(v), backgroundColor: color(v), tension: 0.2, spanGaps: true, pointRadius: points.length > 40 ? 0 : 3,
+    borderColor: color(v), backgroundColor: color(v), borderWidth: v === "--c-avg" ? 3 : 2, tension: 0.2, spanGaps: true, pointRadius: points.length > 40 ? 0 : 3,
   });
   const c = new Chart(canvas, {
     type: "line",
@@ -52,7 +54,7 @@ function lineChart(canvas, points) {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: { y: { ticks: { callback: (v) => brl.format(v), color: color("--muted") }, grid: { color: color("--line") } },
-                x: { ticks: { color: color("--muted") }, grid: { display: false } } },
+                x: { ticks: { color: color("--muted"), maxTicksLimit: innerWidth < 640 ? 5 : 10, maxRotation: 0 }, grid: { display: false } } },
       plugins: { legend: { labels: { color: color("--text") } },
                  tooltip: { callbacks: { label: (i) => `${i.dataset.label}: ${i.raw == null ? "—" : brl.format(i.raw)}` } } },
     },
@@ -112,7 +114,7 @@ function viewExtension() {
 
 async function header() {
   const me = await api("GET", "/api/me");
-  $who.innerHTML = `<span class="muted small">${esc(me.email)}</span> <button class="ghost" id="logout">Sair</button>`;
+  $who.innerHTML = `<span class="muted small email">${esc(me.email)}</span> <button class="ghost" id="logout">Sair</button>`;
   document.getElementById("logout").onclick = async () => { await api("POST", "/api/auth/logout"); location.hash = "#/login"; };
   return me;
 }
@@ -123,9 +125,8 @@ async function viewDecks() {
   const rows = decks.map((d) => `
     <tr class="click" data-id="${d.id}">
       <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${fmtDay(d.last_day)}</span></td>
-      <td class="num">${money(d.total_min)}</td><td class="num">${money(d.total_avg)}</td><td class="num">${money(d.total_max)}</td>
+      <td class="num hide-sm">${money(d.total_min)}</td><td class="num">${money(d.total_avg)}</td><td class="num hide-sm">${money(d.total_max)}</td>
       <td class="num">${change(d.total_avg, d.prev_avg)}</td>
-      <td><button class="ghost" data-del="${d.id}">Remover</button></td>
     </tr>`).join("");
   $app.innerHTML = `
     <div class="card">
@@ -137,7 +138,7 @@ async function viewDecks() {
     <div class="card">
       <h2>Meus decks</h2>
       ${decks.length ? `<div class="scroll"><table>
-        <thead><tr><th>Deck</th><th class="num">Mínimo</th><th class="num">Médio</th><th class="num">Máximo</th><th class="num">Variação</th><th></th></tr></thead>
+        <thead><tr><th>Deck</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
     </div>
     <div class="card">
@@ -166,15 +167,7 @@ async function viewDecks() {
       if (mode === "move") setTimeout(route, 1200);
     } catch (err) { document.getElementById("trmsg").innerHTML = `<div class="err">${esc(err.message)}</div>`; }
   };
-  $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = (e) => {
-    const del = e.target.closest("[data-del]");
-    if (del) {
-      e.stopPropagation();
-      if (confirm("Parar de acompanhar este deck?")) api("DELETE", `/api/decks/${del.dataset.del}`).then(route);
-      return;
-    }
-    location.hash = `#/deck/${tr.dataset.id}`;
-  }));
+  $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => (location.hash = `#/deck/${tr.dataset.id}`)));
 }
 
 async function viewDeck(id) {
@@ -182,18 +175,18 @@ async function viewDeck(id) {
   const [hist, cards] = await Promise.all([api("GET", `/api/decks/${id}/history`), api("GET", `/api/decks/${id}/cards`)]);
   const last = hist.points[hist.points.length - 1] || {};
   const prev = hist.points[hist.points.length - 2] || {};
-  const stat = (label, key) => `<div class="stat"><span class="muted small">${label}</span><b>${money(last[key])}</b>${change(last[key], prev[key])}</div>`;
+  const stat = (label, key) => `<div class="stat${key === "avg" ? " main" : ""}"><span class="muted small">${label}</span><b>${money(last[key])}</b>${change(last[key], prev[key])}</div>`;
 
   const groups = {};
   cards.cards.forEach((c) => (groups[c.board] ||= []).push(c));
   const tables = Object.entries(groups).map(([board, list]) => `
-    <h2>${BOARD[board] || board} <span class="pill">${list.reduce((s, c) => s + c.qty, 0)} cartas</span></h2>
+    <h2>${BOARD[board] || board} <span class="pill">${plural(list.reduce((s, c) => s + c.qty, 0), "carta", "cartas")}</span></h2>
     <div class="scroll"><table>
-      <thead><tr><th class="num">Qtd</th><th>Carta</th><th class="num">Mínimo</th><th class="num">Médio</th><th class="num">Máximo</th><th class="num">Variação</th></tr></thead>
+      <thead><tr><th class="num">Qtd</th><th>Carta</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
       <tbody>${list.map((c) => `
         <tr class="click" data-key="${esc(c.key)}">
           <td class="num">${c.qty}</td><td class="name">${esc(c.name)}</td>
-          <td class="num">${money(c.min)}</td><td class="num">${money(c.avg)}</td><td class="num">${money(c.max)}</td>
+          <td class="num hide-sm">${money(c.min)}</td><td class="num">${money(c.avg)}</td><td class="num hide-sm">${money(c.max)}</td>
           <td class="num">${change(c.avg, c.prev_avg)}</td>
         </tr>`).join("")}</tbody></table></div>`).join("<br>");
 
@@ -205,8 +198,14 @@ async function viewDeck(id) {
       <div class="stats">${stat("Mínimo", "min")}${stat("Médio", "avg")}${stat("Máximo", "max")}</div>
       <div class="card"><h2>Preço do deck</h2><div class="chart"><canvas id="deckChart"></canvas></div></div>
       <div class="card" id="cardBox" style="display:none"><h2 id="cardTitle"></h2><div class="chart"><canvas id="cardChart"></canvas></div></div>
-      <div class="card">${tables}<p class="muted small">Clique em uma carta para ver o histórico. "—" significa sem oferta no dia.</p></div>`
-    : `<div class="card"><p>Ainda não há preços salvos. Abra o deck na LigaMagic com a extensão instalada para salvar o primeiro.</p></div>`}`;
+      <div class="card">${tables}<p class="muted small">Toque em uma carta para ver o histórico. "—" significa sem oferta no dia.</p></div>`
+    : `<div class="card"><p>Ainda não há preços salvos. Abra o deck na LigaMagic com a extensão instalada para salvar o primeiro.</p></div>`}
+    <p><button class="danger" id="untrack">Parar de acompanhar</button></p>`;
+  document.getElementById("untrack").onclick = async () => {
+    if (!confirm("Parar de acompanhar este deck?")) return;
+    await api("DELETE", `/api/decks/${id}`);
+    location.hash = "#/";
+  };
 
   if (!hist.points.length) return;
   lineChart(document.getElementById("deckChart"), hist.points);

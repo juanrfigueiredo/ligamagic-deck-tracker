@@ -63,7 +63,7 @@
         .b { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; max-width: 300px; padding: 12px 14px;
              background: #1d2330; color: #fff; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
         .t { font-weight: 600; margin-bottom: 4px; }
-        button { margin-top: 8px; margin-right: 6px; padding: 6px 10px; border: 0; border-radius: 6px; background: #2f6fde; color: #fff; cursor: pointer; font: inherit; }
+        button { margin-top: 8px; margin-right: 6px; padding: 6px 10px; border: 0; border-radius: 6px; background: #f1601d; color: #1a0c05; font-weight: 600; cursor: pointer; font: inherit; }
         button.x { background: transparent; color: #aab; }
       </style>
       <div class="b"><div class="t">MTG Tracker</div><div>${html}</div><div class="btns"></div></div>`;
