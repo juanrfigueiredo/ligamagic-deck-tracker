@@ -71,6 +71,7 @@ function viewLogin() {
       <form id="f1" class="row"><input type="email" id="email" placeholder="voce@email.com" required autocomplete="email"><button>Enviar código</button></form>
       <form id="f2" class="row" style="margin-top:12px;display:none"><input type="text" id="code" placeholder="Código de 6 dígitos" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button>Entrar</button></form>
       <div id="msg"></div>
+      <p class="muted small" style="margin-top:16px">Os preços são coletados pela <a href="#/extensao">extensão do Chrome</a>.</p>
     </div>`;
   const msg = (t, ok) => (document.getElementById("msg").innerHTML = `<div class="${ok ? "ok" : "err"}">${esc(t)}</div>`);
   const f1 = document.getElementById("f1"), f2 = document.getElementById("f2");
@@ -90,6 +91,23 @@ function viewLogin() {
       location.hash = "#/";
     } catch (err) { msg(err.message); }
   };
+}
+
+function viewExtension() {
+  $app.innerHTML = `
+    <div class="card" style="max-width:640px;margin:24px auto">
+      <h1>Extensão do Chrome</h1>
+      <p class="muted small">A extensão lê os preços quando você abre um deck acompanhado na LigaMagic e envia para cá. Sem ela, o histórico não é coletado.</p>
+      <p><a href="/extensao.zip" download><button>Baixar extensão (.zip)</button></a></p>
+      <ol>
+        <li>Descompacte o zip. Vai aparecer a pasta <b>mtg-tracker</b>.</li>
+        <li>Abra <code>chrome://extensions</code> e ative o <b>Modo do desenvolvedor</b> (canto superior direito).</li>
+        <li>Clique em <b>Carregar sem compactação</b> e escolha a pasta <b>mtg-tracker</b>.</li>
+        <li>Clique no ícone da extensão (fixe pelo ícone de quebra-cabeça) e entre com seu e-mail.</li>
+        <li>Abra um deck na LigaMagic e clique em <b>Acompanhar</b>. Depois, basta abrir o deck de vez em quando.</li>
+      </ol>
+      <p class="muted small">Para atualizar, baixe o zip de novo, substitua a pasta e clique em recarregar no card da extensão em <code>chrome://extensions</code>.</p>
+    </div>`;
 }
 
 async function header() {
@@ -210,6 +228,7 @@ async function route() {
   const h = location.hash || "#/";
   try {
     if (h === "#/login") return viewLogin();
+    if (h === "#/extensao") return viewExtension();
     const m = h.match(/^#\/deck\/(\d+)$/);
     if (m) return await viewDeck(m[1]);
     return await viewDecks();

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -167,5 +168,25 @@ func TestParseDeckRef(t *testing.T) {
 	}
 	if _, ok := parseDeckRef("abc"); ok {
 		t.Error("aceitou abc")
+	}
+}
+
+func TestExtensionZip(t *testing.T) {
+	data, err := buildExtensionZip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+	}
+	for _, n := range []string{"manifest.json", "background.js", "content.js", "popup.html", "popup.js"} {
+		if !names["mtg-tracker/"+n] {
+			t.Errorf("zip sem %s: %v", n, names)
+		}
 	}
 }

@@ -76,8 +76,10 @@ O plano free dorme depois de 15 minutos sem uso. O primeiro acesso depois disso 
 
 ### 4. Extensão
 
-1. Abra `chrome://extensions` e ative o "Modo do desenvolvedor".
-2. Clique em "Carregar sem compactação" e escolha a pasta `extension/`.
+O site oferece a extensão em **Extensão** (`/#/extensao`), com o zip em `/extensao.zip` gerado a partir da pasta `extension/`.
+
+1. Baixe e descompacte o zip, abra `chrome://extensions` e ative o "Modo do desenvolvedor".
+2. Clique em "Carregar sem compactação" e escolha a pasta `mtg-tracker` (ou `extension/`, se estiver com o repositório).
 3. Clique no ícone da extensão, entre com seu e-mail e abra um deck na LigaMagic.
 
 Para usar outro servidor (por exemplo `http://localhost:8080` ou a URL `*.onrender.com`), troque em Configurações, no popup. Um domínio novo também precisa entrar em `host_permissions` no `extension/manifest.json`.

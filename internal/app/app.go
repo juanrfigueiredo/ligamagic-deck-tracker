@@ -54,6 +54,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/decks/{id}/card-history", a.auth(a.tracked(a.handleCardHistory)))
 
 	mux.HandleFunc("POST /api/transfer", a.auth(a.handleTransfer))
+	mux.HandleFunc("GET /extensao.zip", a.handleExtensionZip)
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux.Handle("GET /", http.FileServerFS(sub))
