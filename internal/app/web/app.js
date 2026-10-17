@@ -288,6 +288,7 @@ async function viewHelp(section) {
 async function header() {
   const me = await api("GET", "/api/me");
   $who.innerHTML = `${me.admin ? '<a href="#/admin" class="small">Painel</a>' : ""}
+    <a href="#/compras" class="small">Compras</a>
     <a href="#/conta" class="small" title="${esc(me.email)}">Conta</a>
     <button class="ghost" id="logout">Sair</button>`;
   document.getElementById("logout").onclick = async () => { await api("POST", "/api/auth/logout"); location.hash = "#/login"; };
@@ -297,8 +298,9 @@ async function header() {
 
 async function viewDecks() {
   await header();
-  const decks = await api("GET", "/api/decks");
+  const [decks, wish] = await Promise.all([api("GET", "/api/decks"), api("GET", "/api/wishlist").catch(() => [])]);
   const pending = decks.filter((d) => !d.snapshot_today).length;
+  const wishDown = wish.filter((c) => c.avg != null && c.added_avg != null && c.avg < c.added_avg).length;
   const rows = decks.map((d) => `
     <tr class="click" data-id="${d.id}">
       <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${d.snapshot_today ? '<span class="tag ok">✓ hoje</span>' : fmtDay(d.last_day)}</span></td>
@@ -318,6 +320,8 @@ async function viewDecks() {
         <thead><tr><th>Deck</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
     </div>
+    ${wish.length ? `<a class="card wishcard" href="#/compras"><span><b>Lista de compras</b> · ${plural(wish.length, "carta", "cartas")}</span>
+      <span class="${wishDown ? "tag ok" : "muted small"}">${wishDown ? `▼ ${plural(wishDown, "baixou", "baixaram")} de preço` : "nenhuma baixou ainda"}</span></a>` : ""}
     ${decks.length >= 2 ? `<div class="card">
       <h2>Comparar decks</h2>
       <form id="cmp" class="row">
@@ -391,7 +395,9 @@ function manaHTML(m, cmc) {
 
 async function viewCompare(aId, bId) {
   const me = await header();
-  const [decks, data] = await Promise.all([api("GET", "/api/decks"), api("GET", `/api/compare?a=${aId}&b=${bId}`)]);
+  const [decks, data, wish] = await Promise.all([api("GET", "/api/decks"), api("GET", `/api/compare?a=${aId}&b=${bId}`), api("GET", "/api/wishlist")]);
+  const inWish = new Set(wish.map((w) => w.key));
+  const selected = new Map(); // card key -> quantidade a comprar
   const A = data.a, B = data.b;
   const nameOf = (d) => d.name || "Deck " + d.id;
   document.title = `${nameOf(A)} × ${nameOf(B)} · MTG Tracker`;
@@ -424,33 +430,139 @@ async function viewCompare(aId, bId) {
       <p class="muted small" style="margin:0">Para montar B a partir de A: <b>${money(cost(true))}</b> · de A a partir de B: <b>${money(cost(false))}</b> (preço médio)</p>
       <label class="small row" style="gap:6px">Ordenar por <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortKey ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     </div>
+    <p class="muted small">Marque as cartas que quer comprar e adicione à <a href="#/compras">lista de compras</a> para acompanhar quando baixarem de preço.</p>
     ${unknown ? `<p class="muted small">${plural(unknown, "carta ainda sem", "cartas ainda sem")} custo de mana e tipo: eles aparecem depois da próxima coleta dos decks.</p>` : ""}
     <div id="lists"></div>`;
 
-  const table = (cards, mode) => {
+  // Quantas cópias comprar: o que falta de um lado para o outro.
+  const buyQty = (c, mode) => (mode === "a" ? c.qty_a : mode === "b" ? c.qty_b : Math.abs(c.qty_b - c.qty_a)) || 1;
+  const table = (cards, mode, pick) => {
     if (!cards.length) return '<p class="muted small">Nenhuma.</p>';
     const qtyHead = mode === "diff" ? '<th class="num">A</th><th class="num">B</th>' : '<th class="num">Qtd</th>';
     const rows = [...cards].sort(SORTS[sortKey][1]).map((c) => {
       const q = mode === "diff" ? `<td class="num">${c.qty_a}</td><td class="num">${c.qty_b} <span class="${c.qty_b > c.qty_a ? "up" : "down"} small">(${c.qty_b > c.qty_a ? "+" : ""}${c.qty_b - c.qty_a})</span></td>`
         : `<td class="num">${mode === "a" ? c.qty_a : c.qty_b}</td>`;
-      return `<tr>${q}<td class="name">${esc(c.name)}${c.board === "side" ? ' <span class="pill">side</span>' : ""}</td>
+      const box = pick ? `<td class="pick"><input type="checkbox" data-key="${esc(c.key)}" data-qty="${buyQty(c, mode)}" aria-label="Selecionar ${esc(c.name)}" ${selected.has(c.key) ? "checked" : ""}></td>` : "";
+      return `<tr class="${selected.has(c.key) ? "sel" : ""}">${box}${q}<td class="name">${esc(c.name)}${c.board === "side" ? ' <span class="pill">side</span>' : ""}${inWish.has(c.key) ? ' <a href="#/compras" class="pill wish" title="Na lista de compras">🛒 na lista</a>' : ""}</td>
         <td>${manaHTML(c.mana, c.cmc)}</td><td class="hide-sm muted small">${esc(c.type || "?")}</td><td class="num">${money(c.unit_avg)}</td></tr>`;
     }).join("");
-    return `<div class="scroll"><table><thead><tr>${qtyHead}<th>Carta</th><th>Custo</th><th class="hide-sm">Tipo</th><th class="num">Preço un.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const all = pick ? `<th class="pick"><input type="checkbox" class="all" aria-label="Selecionar todas"></th>` : "";
+    return `<div class="scroll"><table><thead><tr>${all}${qtyHead}<th>Carta</th><th>Custo</th><th class="hide-sm">Tipo</th><th class="num">Preço un.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
-  const section = (title, cards, mode, open = true) => `<details class="card cmp" ${open ? "open" : ""}><summary><h2>${title} <span class="pill">${cards.length}</span></h2></summary>${table(cards, mode)}</details>`;
+  const section = (title, cards, mode, open = true, pick = true) => `<details class="card cmp" ${open ? "open" : ""}><summary><h2>${title} <span class="pill">${cards.length}</span></h2></summary>${table(cards, mode, pick)}</details>`;
+  const bar = document.createElement("div");
+  bar.className = "buybar";
+  const updateBar = () => {
+    const n = selected.size;
+    const total = data.cards.filter((c) => selected.has(c.key)).reduce((s, c) => s + selected.get(c.key) * (c.unit_avg || 0), 0);
+    bar.innerHTML = n ? `<span><b>${plural(n, "carta selecionada", "cartas selecionadas")}</b> · ${money(total)}</span>
+      <span class="row"><button class="ghost" id="clr">Limpar</button><button id="buy">Adicionar à lista de compras</button></span>` : "";
+    bar.style.display = n ? "flex" : "none";
+    if (!n) return;
+    document.getElementById("clr").onclick = () => { selected.clear(); render(); };
+    document.getElementById("buy").onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        await api("POST", "/api/wishlist", { items: [...selected].map(([key, qty]) => ({ key, qty })) });
+        selected.forEach((_, k) => inWish.add(k));
+        const n2 = selected.size;
+        selected.clear();
+        render();
+        bar.style.display = "flex";
+        bar.innerHTML = `<span class="ok" style="margin:0">${plural(n2, "carta adicionada", "cartas adicionadas")} à lista de compras.</span><a href="#/compras"><button>Ver lista</button></a>`;
+        setTimeout(updateBar, 5000);
+      } catch (err) { alert(err.message); e.target.disabled = false; }
+    };
+  };
   const render = () => {
     document.getElementById("lists").innerHTML =
       section(`Só em A · ${esc(nameOf(A))}`, onlyA, "a") +
       section(`Só em B · ${esc(nameOf(B))}`, onlyB, "b") +
       section("Quantidade diferente", diff, "diff") +
-      section("Em comum", same, "a", false);
+      section("Em comum", same, "a", false, false);
+    document.querySelectorAll("#lists details").forEach((det) => {
+      const boxes = [...det.querySelectorAll("tbody input[type=checkbox]")];
+      const all = det.querySelector("input.all");
+      if (all) all.checked = boxes.length > 0 && boxes.every((b) => b.checked);
+      boxes.forEach((b) => (b.onchange = () => {
+        if (b.checked) selected.set(b.dataset.key, +b.dataset.qty); else selected.delete(b.dataset.key);
+        b.closest("tr").classList.toggle("sel", b.checked);
+        if (all) all.checked = boxes.every((x) => x.checked);
+        updateBar();
+      }));
+      if (all) all.onchange = () => { boxes.forEach((b) => { b.checked = all.checked; b.onchange(); }); };
+    });
+    updateBar();
   };
+  $app.appendChild(bar);
   render();
   document.getElementById("sort").onchange = (e) => { sortKey = e.target.value; store.set("cmpSort", sortKey); render(); };
   const f = document.getElementById("cmp2");
   f.onsubmit = (e) => { e.preventDefault(); location.hash = `#/comparar/${f.ca.value}/${f.cb.value}`; };
   document.getElementById("swap").onclick = () => (location.hash = `#/comparar/${B.id}/${A.id}`);
+}
+
+// ---------- lista de compras ----------
+
+async function viewWishlist() {
+  await header();
+  document.title = "Lista de compras · MTG Tracker";
+  let items = await api("GET", "/api/wishlist");
+  let onlyDown = store.get("wishDown") === "1";
+  let chart = null;
+  const fell = (c) => c.avg != null && c.added_avg != null && c.avg < c.added_avg;
+  const draw = () => {
+    clearCharts();
+    const total = (k) => items.reduce((s, c) => s + (c[k] ?? 0) * c.qty, 0);
+    const down = items.filter(fell);
+    const shown = onlyDown ? down : items;
+    const rows = shown.map((c) => `
+      <tr class="click ${fell(c) ? "fell" : ""}" data-key="${esc(c.key)}">
+        <td class="name">${esc(c.name)} ${fell(c) ? '<span class="tag ok">▼ baixou</span>' : ""}<br><span class="muted small">${manaHTML(c.mana, c.cmc)}</span></td>
+        <td class="num">${c.qty}</td>
+        <td class="num hide-sm">${money(c.added_avg)}<br><span class="muted small">${fmtDay(c.added_day)}</span></td>
+        <td class="num"><b>${money(c.avg)}</b><br><span class="muted small">${c.day ? fmtDay(c.day) : "sem preço"}</span></td>
+        <td class="num">${change(c.avg, c.added_avg)}<br><span class="muted small" title="Em relação ao dia anterior">${c.prev_avg != null ? "dia: " : ""}${c.prev_avg != null ? change(c.avg, c.prev_avg) : ""}</span></td>
+        <td class="num hide-sm">${money(c.low_avg)}</td>
+        <td class="num"><button class="ghost small-btn" data-del="${esc(c.key)}" title="Tirar da lista" aria-label="Tirar ${esc(c.name)} da lista">✕</button></td>
+      </tr>
+      <tr class="chartrow" data-for="${esc(c.key)}" hidden><td colspan="7"><div class="chart small-chart"><canvas></canvas></div></td></tr>`).join("");
+    $app.innerHTML = `
+      <p><a href="#/">← Meus decks</a></p>
+      <h1>Lista de compras</h1>
+      ${items.length ? `
+      <div class="stats">
+        <div class="stat main"><span class="muted small">Total hoje</span><b>${money(total("avg"))}</b><span class="muted small">preço médio × quantidade</span></div>
+        <div class="stat"><span class="muted small">Quando entraram</span><b>${money(total("added_avg"))}</b><span class="muted small">${change(total("avg"), total("added_avg"))}</span></div>
+        <div class="stat"><span class="muted small">Baixaram de preço</span><b>${down.length}</b><span class="muted small">de ${plural(items.length, "carta", "cartas")}</span></div>
+      </div>
+      <div class="card">
+        <div class="row spread"><h2>Cartas</h2><label class="opt small"><input type="checkbox" id="onlydown" ${onlyDown ? "checked" : ""}> Só as que baixaram</label></div>
+        ${shown.length ? `<div class="scroll"><table>
+          <thead><tr><th>Carta</th><th class="num">Qtd</th><th class="num hide-sm">Entrou</th><th class="num">Agora</th><th class="num">Variação</th><th class="num hide-sm">Menor</th><th></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+        <p class="muted small">Preço de 1 cópia, médio, pela última coleta dos decks em que a carta aparece. Clique numa carta para ver o histórico.</p>` : '<p class="muted">Nenhuma carta baixou de preço desde que entrou na lista.</p>'}
+      </div>` : `<div class="card"><p>Sua lista está vazia.</p><p class="muted small">Para adicionar, <a href="#/">compare dois decks</a> e marque as cartas que quer comprar. O preço de cada carta continua sendo atualizado enquanto algum deck acompanhado tiver ela.</p></div>`}`;
+    const od = document.getElementById("onlydown");
+    if (od) od.onchange = () => { onlyDown = od.checked; store.set("wishDown", onlyDown ? "1" : "0"); draw(); };
+    $app.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async (e) => {
+      e.stopPropagation();
+      await api("DELETE", "/api/wishlist/" + encodeURIComponent(b.dataset.del));
+      items = items.filter((c) => c.key !== b.dataset.del);
+      draw();
+    }));
+    $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => {
+      const row = $app.querySelector(`tr.chartrow[data-for="${CSS.escape(tr.dataset.key)}"]`);
+      const open = row.hidden;
+      $app.querySelectorAll("tr.chartrow").forEach((r) => (r.hidden = true));
+      if (chart) { chart.destroy(); chart = null; }
+      if (!open) return;
+      row.hidden = false;
+      const c = items.find((x) => x.key === tr.dataset.key);
+      chart = lineChart(row.querySelector("canvas"), c.points);
+    }));
+  };
+  draw();
 }
 
 const PERIODS = [["30", "30 dias"], ["90", "90 dias"], ["all", "Tudo"]];
@@ -716,6 +828,7 @@ async function route() {
     if (h === "#/login") return viewLogin();
     if (h === "#/extensao") return await viewHelp("extensao");
     if (h === "#/ajuda") return await viewHelp();
+    if (h === "#/compras") return await viewWishlist();
     let mh = h.match(/^#\/ajuda\/(\w+)$/);
     if (mh) return await viewHelp(mh[1]);
     if (h === "#/conta") return await viewAccount();

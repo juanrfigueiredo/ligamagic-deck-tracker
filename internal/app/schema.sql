@@ -107,3 +107,13 @@ CREATE TABLE IF NOT EXISTS card_info (
   mana       TEXT    NOT NULL DEFAULT '',
   updated_at INTEGER NOT NULL
 );
+
+-- Lista de compras: cartas que o usuário quer comprar, com o preço de 1 cópia quando entraram.
+CREATE TABLE IF NOT EXISTS wishlist (
+  user_id    INTEGER NOT NULL,
+  card_key   TEXT    NOT NULL,
+  qty        INTEGER NOT NULL DEFAULT 1,
+  added_avg  INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, card_key)
+);

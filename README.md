@@ -27,6 +27,7 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 - **Coleta automática:** uma vez por hora, com o Chrome aberto, a extensão abre numa janela minimizada os decks que ainda não têm o preço do dia (cada deck é tentado no máximo uma vez por dia). O ícone mostra quantos faltam.
 - **Página do deck:** período do gráfico (30 dias, 90 dias, tudo), maiores altas e baixas, busca e ordenação de cartas e exportação em CSV.
 - **Comparar decks:** em `#/comparar/A/B`, lista separadamente o que só está em A, só em B, o que muda de quantidade e o que é igual. Ordena por custo de mana (padrão), tipo, nome, preço ou quantidade, e mostra quanto custa montar um a partir do outro. Tipo e custo de mana vêm da própria página do deck na LigaMagic, a partir da coleta seguinte.
+- **Lista de compras:** na comparação, marque as cartas que quer comprar. Em `#/compras` cada carta mostra o preço de quando entrou, o de agora, a variação, o menor preço desde então e o histórico. As que baixaram ficam em destaque e no topo. O preço vem dos decks acompanhados em que a carta aparece.
 - **Alertas:** e-mail quando o preço médio do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
 - **Link público:** somente leitura, sem login; pode ser desativado a qualquer momento.
 - **Conta:** baixar todos os dados guardados (JSON) e excluir a conta.
@@ -136,6 +137,9 @@ Toda rota, exceto `/api/auth/request`, `/api/auth/verify`, `/api/extension` e `/
 | DELETE | `/api/decks/{id}/share` | desativa o link público |
 | GET | `/api/decks/{id}/export.csv` | histórico em CSV (`;` e vírgula decimal) |
 | GET | `/api/public/{token}/history`, `/cards`, `/card-history`, `/export.csv` | link público, sem login |
+| GET | `/api/wishlist` | lista de compras com preço de entrada, atual, menor e histórico |
+| POST | `/api/wishlist` | `{items: [{key, qty}]}` adiciona (o preço de entrada é o da primeira vez) |
+| DELETE | `/api/wishlist/{key}` | tira da lista |
 | GET | `/api/compare?a=&b=` | cartas (deck e sideboard) dos últimos snapshots dos dois decks |
 | POST | `/api/transfer` | `{email, mode: "copy"\|"move", deck_ids?}` |
 | GET | `/api/me/key` | se há chave de coleta e quando foi usada |

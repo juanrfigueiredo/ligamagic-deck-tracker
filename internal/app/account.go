@@ -89,6 +89,29 @@ func (a *App) handleExportAccount(w http.ResponseWriter, r *http.Request, u user
 	}
 	rows.Close()
 
+	type wishOut struct {
+		Card     string `json:"card"`
+		Qty      int64  `json:"qty"`
+		AddedAvg *int64 `json:"added_avg"`
+		AddedAt  string `json:"added_at"`
+	}
+	wish := []wishOut{}
+	rows, err = a.db.QueryContext(ctx, `SELECT c.name, w.qty, w.added_avg, w.created_at FROM wishlist w JOIN cards c ON c.card_key = w.card_key WHERE w.user_id = ? ORDER BY w.created_at`, u.ID)
+	if err != nil {
+		serverErr(w, err)
+		return
+	}
+	for rows.Next() {
+		var o wishOut
+		var avg sql.NullInt64
+		var c int64
+		if rows.Scan(&o.Card, &o.Qty, &avg, &c) == nil {
+			o.AddedAvg, o.AddedAt = nullPtr(avg), ts(c)
+			wish = append(wish, o)
+		}
+	}
+	rows.Close()
+
 	w.Header().Set("Content-Disposition", `attachment; filename="mtg-tracker-meus-dados.json"`)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"exported_at": ts(a.now().Unix()),
@@ -96,6 +119,7 @@ func (a *App) handleExportAccount(w http.ResponseWriter, r *http.Request, u user
 		"created_at":  ts(created),
 		"decks":       decks,
 		"sessions":    sessions,
+		"wishlist":    wish,
 		"note":        "Os códigos de login são guardados só como hash e apagados em até 1 dia. O histórico de preços pertence aos decks, não à conta.",
 	})
 }
@@ -125,6 +149,7 @@ func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request, u user
 		`DELETE FROM shares WHERE user_id = ?`,
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM api_keys WHERE user_id = ?`,
+		`DELETE FROM wishlist WHERE user_id = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, u.ID); err != nil {

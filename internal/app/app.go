@@ -70,6 +70,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/public/{token}/card-history", a.public(a.handleCardHistory))
 	mux.HandleFunc("GET /api/public/{token}/export.csv", a.public(a.handleExportCSV))
 
+	mux.HandleFunc("GET /api/wishlist", a.auth(a.handleWishlist))
+	mux.HandleFunc("POST /api/wishlist", a.auth(a.handleWishlistAdd))
+	mux.HandleFunc("DELETE /api/wishlist/{key}", a.auth(a.handleWishlistRemove))
 	mux.HandleFunc("GET /api/compare", a.auth(a.handleCompare))
 	mux.HandleFunc("POST /api/transfer", a.auth(a.handleTransfer))
 	mux.HandleFunc("GET /api/extension", a.handleExtensionInfo)
