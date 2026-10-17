@@ -124,6 +124,7 @@ func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request, u user
 		`DELETE FROM alerts WHERE user_id = ?`,
 		`DELETE FROM shares WHERE user_id = ?`,
 		`DELETE FROM sessions WHERE user_id = ?`,
+		`DELETE FROM api_keys WHERE user_id = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, u.ID); err != nil {

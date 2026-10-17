@@ -96,7 +96,8 @@ async function checkExtension() {
     return false;
   };
   if (!installed) {
-    $banner.innerHTML = `<div class="banner">A extensão do Chrome não está instalada. Sem ela, os preços não são coletados. <a href="#/extensao">Instalar</a></div>`;
+    const key = await api("GET", "/api/me/key").catch(() => null);
+    $banner.innerHTML = key?.exists ? "" : `<div class="banner">Nenhuma forma de coleta configurada: sem ela, os preços não são salvos. <a href="#/ajuda">Ver como</a></div>`;
   } else if (latest && older(installed, latest)) {
     $banner.innerHTML = `<div class="banner">Há uma versão nova da extensão (${esc(latest)}, você tem ${esc(installed)}). <a href="#/extensao">Atualizar</a></div>`;
   } else {
@@ -115,7 +116,7 @@ function viewLogin() {
       <form id="f1" class="row"><input type="email" id="email" placeholder="voce@email.com" required autocomplete="email"><button>Enviar código</button></form>
       <form id="f2" class="row" style="margin-top:12px;display:none"><input type="text" id="code" placeholder="Código de 6 dígitos" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button>Entrar</button></form>
       <div id="msg"></div>
-      <p class="muted small" style="margin-top:16px">Os preços são coletados pela <a href="#/extensao">extensão do Chrome</a>.</p>
+      <p class="muted small" style="margin-top:16px">Veja na <a href="#/ajuda">Ajuda</a> como os preços são coletados.</p>
     </div>`;
   const msg = (t, ok) => (document.getElementById("msg").innerHTML = `<div class="${ok ? "ok" : "err"}">${esc(t)}</div>`);
   const f1 = document.getElementById("f1"), f2 = document.getElementById("f2");
@@ -137,11 +138,97 @@ function viewLogin() {
   };
 }
 
-function viewExtension() {
+// ---------- ajuda: extensão, favorito e coletor ----------
+
+const RELEASE = "https://github.com/juanrfigueiredo/ligamagic-deck-tracker/releases/download/coletor/";
+
+// Monta a URL javascript: do favorito a partir de parse.js + favorito.js.
+// Linhas só de comentário saem; as quebras de linha ficam codificadas (%0A), então o código continua válido.
+async function bookmarkletURL(key) {
+  const [parse, run] = await Promise.all(["/parse.js", "/favorito.js"].map((u) => fetch(u).then((r) => r.text())));
+  const code = (parse + "\n" + run).split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("//")).join("\n");
+  return "javascript:" + encodeURIComponent(`(function(){${code}\nlmtRun(${JSON.stringify(location.origin)},${JSON.stringify(key)});})();`);
+}
+
+async function viewHelp(section) {
+  // A ajuda abre sem login também; só chama header() (que manda para o login) se houver sessão.
+  const logged = await fetch("/api/me", { credentials: "same-origin" }).then((r) => r.ok).catch(() => false);
+  const me = logged ? await header() : null;
+  if (!me) $who.innerHTML = `<a href="#/login" class="small">Entrar</a>`;
+  const keyInfo = me ? await api("GET", "/api/me/key").catch(() => null) : null;
+  const keyStatus = !me ? `<p class="muted small"><a href="#/login">Entre</a> para gerar sua chave.</p>`
+    : keyInfo?.exists ? `<p class="muted small">Você já tem uma chave, criada em ${esc(keyInfo.created_at)}${keyInfo.last_used_at ? `, usada pela última vez em ${esc(keyInfo.last_used_at)}` : ", ainda não usada"}. Ela só aparece na hora em que é gerada: se você guardou, cole abaixo. Gerar outra desliga o favorito e o coletor que usam a antiga.</p>`
+    : `<p class="muted small">Você ainda não tem chave.</p>`;
   $app.innerHTML = `
-    <div class="card" style="max-width:640px;margin:24px auto">
-      <h1>Extensão do Chrome</h1>
-      <p class="muted small">A extensão lê os preços dos decks acompanhados na LigaMagic e envia para cá. Uma vez por dia, com o Chrome aberto, ela abre sozinha numa janela minimizada os decks que ainda não têm o preço do dia.</p>
+    <h1>Ajuda: como coletar os preços</h1>
+    <p class="muted">A LigaMagic não tem API e só aceita acesso do Brasil, então o preço é lido de um navegador seu. Existem três jeitos. Use um ou combine: o histórico guarda no máximo um preço por deck por dia.</p>
+    <div class="card">
+      <div class="scroll"><table>
+        <thead><tr><th>Jeito</th><th>Automático?</th><th class="hide-sm">Onde funciona</th><th>Precisa</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="#/ajuda/coletor">Coletor no computador</a></td><td>Sim, de hora em hora</td><td class="hide-sm">Windows, Linux, Mac</td><td>Computador ligado com Chrome ou Edge</td></tr>
+          <tr><td class="name"><a href="#/ajuda/extensao">Extensão do Chrome</a></td><td>Sim, com o Chrome aberto</td><td class="hide-sm">Chrome no computador</td><td>Instalar a extensão</td></tr>
+          <tr><td class="name"><a href="#/ajuda/favorito">Favorito (bookmarklet)</a></td><td>Não, um toque por deck</td><td class="hide-sm">Qualquer navegador, inclusive no celular</td><td>Nada instalado</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card" id="chave">
+      <h2>Sua chave de coleta</h2>
+      <p class="muted small">O favorito e o coletor usam uma chave em vez do login. Ela só serve para acompanhar decks e salvar preços: não dá acesso à sua conta.</p>
+      ${keyStatus}
+      ${me ? `<div class="row"><button id="genkey" class="${keyInfo?.exists ? "ghost" : ""}">${keyInfo?.exists ? "Gerar nova chave" : "Gerar chave"}</button>
+        ${keyInfo?.exists ? '<button id="delkey" class="danger">Desligar chave</button>' : ""}</div>
+      <div class="row" style="margin-top:12px"><input type="text" id="key" placeholder="lmk_..." autocomplete="off" spellcheck="false"><button class="ghost" id="copykey">Copiar</button></div>
+      <div id="keymsg"></div>` : ""}
+    </div>
+
+    <div class="card" id="coletor">
+      <h2>Coletor no computador (automático)</h2>
+      <p class="muted small">Um programa que roda de hora em hora no seu computador, abre escondido os decks que ainda não têm o preço do dia e envia para cá. Se o computador estiver desligado, ele coleta na próxima hora em que estiver ligado.</p>
+      <ol>
+        <li>Gere a chave acima e copie.</li>
+        <li>Baixe o coletor: <a href="${RELEASE}coletor-windows.exe">Windows</a> · <a href="${RELEASE}coletor-mac-arm64">Mac (M1 ou mais novo)</a> · <a href="${RELEASE}coletor-mac-intel">Mac (Intel)</a> · <a href="${RELEASE}coletor-linux">Linux</a>.</li>
+        <li>Coloque o arquivo numa pasta fixa (por exemplo <code>Documentos\\MTG</code>). O agendamento aponta para esse lugar: se mover depois, rode de novo.</li>
+        <li>Dê dois cliques no arquivo. No Windows, se aparecer "O Windows protegeu o computador", clique em <b>Mais informações</b> e <b>Executar assim mesmo</b> (o programa não é assinado). No Mac, clique com o botão direito e <b>Abrir</b>. No Linux/Mac pelo terminal: <code>chmod +x coletor-*</code> e rode.</li>
+        <li>Cole a chave quando ele pedir e responda <b>S</b> para rodar sozinho de hora em hora.</li>
+        <li>Ele já faz a primeira coleta e mostra o resultado de cada deck. Pronto: na lista de decks aparece <span class="tag ok">✓ hoje</span>.</li>
+      </ol>
+      <details>
+        <summary class="small">Opções e problemas</summary>
+        <ul class="small">
+          <li>O coletor usa o Chrome ou o Edge que já estão instalados. Se não achar, rode com <code>-chrome "caminho\\do\\chrome.exe"</code>.</li>
+          <li>Se o Cloudflare barrar o modo escondido, ele tenta de novo sozinho com a janela fora da tela. Para ver o que acontece, rode com <code>-visivel</code>.</li>
+          <li>Coletar de novo todos os decks, mesmo os que já têm o preço de hoje: <code>-todos</code>.</li>
+          <li>Trocar a chave: <code>-chave lmk_...</code>. Parar o agendamento: <code>-desagendar</code>.</li>
+          <li>O log das execuções automáticas fica em <code>%AppData%\\mtg-tracker\\coletor.log</code> (Windows) ou <code>~/.config/mtg-tracker/coletor.log</code> (Linux).</li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="card" id="favorito">
+      <h2>Favorito (bookmarklet)</h2>
+      <p class="muted small">Um favorito que, tocado na página de um deck da LigaMagic, salva o preço do dia. Funciona no celular e em qualquer navegador, sem instalar nada.</p>
+      <p id="bmwrap" class="muted small">${me ? "Gere ou cole a chave acima para montar o seu favorito." : '<a href="#/login">Entre</a> para montar o seu favorito.'}</p>
+      <h3 class="small">No computador</h3>
+      <ol>
+        <li>Mostre a barra de favoritos (<code>Ctrl+Shift+B</code>).</li>
+        <li>Arraste o botão <b>MTG: salvar preço</b> para a barra.</li>
+        <li>Abra um deck na LigaMagic, espere os preços aparecerem e clique no favorito. Um aviso no canto mostra o preço salvo.</li>
+      </ol>
+      <h3 class="small">No celular (Chrome ou Safari)</h3>
+      <ol>
+        <li>Toque em <b>Copiar código do favorito</b>.</li>
+        <li>Salve qualquer página nos favoritos (estrela no Chrome, botão Compartilhar e <b>Adicionar Favorito</b> no Safari).</li>
+        <li>Edite esse favorito: nome <b>MTG</b> e, no endereço, apague tudo e cole o código.</li>
+        <li>Na página do deck, toque na barra de endereço, digite <b>MTG</b> e toque no favorito que aparece (no Safari, abra pelos Favoritos).</li>
+      </ol>
+      <p class="muted small">Se o deck ainda não estiver na sua lista, ele pergunta se quer acompanhar. Se a LigaMagic bloquear o envio direto, abre uma janelinha deste site que termina o envio (permita pop-ups se o navegador pedir).</p>
+    </div>
+
+    <div class="card" id="extensao">
+      <h2>Extensão do Chrome</h2>
+      <p class="muted small">Lê os preços quando você abre um deck acompanhado e, uma vez por hora com o Chrome aberto, abre sozinha numa janela minimizada os decks que ainda não têm o preço do dia.</p>
       <p><a href="/extensao.zip" download><button>Baixar extensão (.zip)</button></a></p>
       <ol>
         <li>Descompacte o zip. Vai aparecer a pasta <b>mtg-tracker</b>.</li>
@@ -152,6 +239,50 @@ function viewExtension() {
       </ol>
       <p class="muted small">Para atualizar, baixe o zip de novo, substitua a pasta e clique em recarregar no card da extensão em <code>chrome://extensions</code>. O site avisa quando houver versão nova.</p>
     </div>`;
+
+  if (section) document.getElementById(section)?.scrollIntoView();
+  if (!me) return;
+
+  const $key = document.getElementById("key"), $msg = document.getElementById("keymsg"), $bm = document.getElementById("bmwrap");
+  const say = (t, ok) => ($msg.innerHTML = `<div class="${ok ? "ok" : "err"}">${esc(t)}</div>`);
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  };
+  async function buildBookmarklet() {
+    const k = $key.value.trim();
+    if (!/^lmk_[\w-]{20,}$/.test(k)) {
+      $bm.className = "muted small";
+      $bm.textContent = "Gere ou cole a chave acima para montar o seu favorito.";
+      return;
+    }
+    const url = await bookmarkletURL(k);
+    $bm.className = "row";
+    $bm.innerHTML = `<a id="bm" class="bm" title="Arraste para a barra de favoritos">MTG: salvar preço</a><button class="ghost" id="copybm">Copiar código do favorito</button>`;
+    const a = document.getElementById("bm");
+    a.href = url;
+    a.onclick = (e) => { e.preventDefault(); alert("Arraste este botão para a barra de favoritos. Ele só funciona na página de um deck da LigaMagic."); };
+    document.getElementById("copybm").onclick = async (e) => {
+      e.target.textContent = (await copy(url)) ? "Copiado!" : "Não consegui copiar";
+      setTimeout(() => (e.target.textContent = "Copiar código do favorito"), 2000);
+    };
+  }
+  $key.oninput = buildBookmarklet;
+  document.getElementById("copykey").onclick = async () => say((await copy($key.value)) ? "Chave copiada." : "Selecione e copie a chave manualmente.", true);
+  document.getElementById("genkey").onclick = async () => {
+    if (keyInfo?.exists && !confirm("Gerar uma chave nova desliga o favorito e o coletor que usam a antiga. Continuar?")) return;
+    try {
+      const r = await api("POST", "/api/me/key");
+      $key.value = r.key;
+      say("Chave gerada. Guarde em lugar seguro: ela não aparece de novo.", true);
+      buildBookmarklet();
+    } catch (err) { say(err.message); }
+  };
+  const del = document.getElementById("delkey");
+  if (del) del.onclick = async () => {
+    if (!confirm("Desligar a chave? O favorito e o coletor param de funcionar até você gerar outra.")) return;
+    await api("DELETE", "/api/me/key");
+    viewHelp("chave");
+  };
 }
 
 async function header() {
@@ -477,7 +608,10 @@ async function route() {
   const h = location.hash || "#/";
   try {
     if (h === "#/login") return viewLogin();
-    if (h === "#/extensao") return viewExtension();
+    if (h === "#/extensao") return await viewHelp("extensao");
+    if (h === "#/ajuda") return await viewHelp();
+    let mh = h.match(/^#\/ajuda\/(\w+)$/);
+    if (mh) return await viewHelp(mh[1]);
     if (h === "#/conta") return await viewAccount();
     if (h === "#/admin") return await viewAdmin();
     let m = h.match(/^#\/p\/([\w-]+)$/);

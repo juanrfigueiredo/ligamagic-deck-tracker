@@ -64,6 +64,10 @@ select { min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); bor
 .filters { margin-bottom: 12px; } .filters input { flex: 2; } .filters select { flex: 1; }
 .stats4 { grid-template-columns: repeat(4, 1fr); }
 .small-chart { height: 200px; }
+h3.small { margin: 16px 0 4px; }
+details { margin-top: 8px; } summary { cursor: pointer; font-weight: 500; }
+.bm { display: inline-block; padding: 9px 16px; border-radius: 8px; background: var(--brand); color: var(--on-brand); text-decoration: none; font-weight: 700; cursor: grab; }
+#key { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; }
 
 @media (max-width: 640px) {
   .grid2 { grid-template-columns: 1fr; gap: 0; }
@@ -73,7 +77,6 @@ select { min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); bor
   h1 { font-size: 20px; }
   .hide-sm { display: none; }
   header nav { flex-wrap: nowrap; gap: 10px; }
-  header nav > a[href="#/extensao"] { display: none; }
   .stats { gap: 8px; }
   .stat { padding: 10px 8px; }
   .stat b { font-size: 16px; }

@@ -88,3 +88,12 @@ CREATE TABLE IF NOT EXISTS shares (
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_user_deck ON shares (user_id, deck_id);
+
+-- Chave de coleta: usada pelo favorito (bookmarklet) e pelo coletor do computador.
+-- Uma por usuário (gerar outra invalida a anterior). Só vale nas rotas de coleta.
+CREATE TABLE IF NOT EXISTS api_keys (
+  key_hash     TEXT    PRIMARY KEY,
+  user_id      INTEGER NOT NULL UNIQUE,
+  created_at   INTEGER NOT NULL,
+  last_used_at INTEGER
+);
