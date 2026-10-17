@@ -43,10 +43,13 @@ func TestReadDeck(t *testing.T) {
 	if s.Name != "Zurgo Aggro" || len(s.Cards) != 3 || *s.Totals.Avg != 177358 {
 		t.Fatalf("snapshot: %+v", s)
 	}
-	if c := string(s.Cards[1]); !strings.Contains(c, `"min":null`) || !strings.Contains(c, `"qty":4`) {
+	if c := string(s.Cards[0]); !strings.Contains(c, `"cmc":4`) || !strings.Contains(c, `"mana":"2RR"`) || !strings.Contains(c, `"type":"Comandante"`) {
+		t.Fatalf("carta 1: %s", c)
+	}
+	if c := string(s.Cards[1]); !strings.Contains(c, `"min":null`) || !strings.Contains(c, `"qty":4`) || !strings.Contains(c, `"cmc":0`) || !strings.Contains(c, `"type":"Terrenos"`) {
 		t.Fatalf("carta 2: %s", c)
 	}
-	if c := string(s.Cards[2]); !strings.Contains(c, `"board":"side"`) {
+	if c := string(s.Cards[2]); !strings.Contains(c, `"board":"side"`) || !strings.Contains(c, `"cmc":null`) {
 		t.Fatalf("sideboard: %s", c)
 	}
 }

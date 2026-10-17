@@ -309,7 +309,7 @@ async function viewDecks() {
     <div class="card">
       <h2>Acompanhar deck</h2>
       <form id="add" class="row"><input type="text" id="deck" placeholder="URL ou ID do deck na LigaMagic" required><button>Adicionar</button></form>
-      <p class="muted small">A extensão salva o preço de cada deck uma vez por dia.</p>
+      <p class="muted small">O preço de cada deck é salvo uma vez por dia. Veja na <a href="#/ajuda">Ajuda</a> como coletar.</p>
       <div id="addmsg"></div>
     </div>
     <div class="card">
@@ -318,6 +318,14 @@ async function viewDecks() {
         <thead><tr><th>Deck</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
     </div>
+    ${decks.length >= 2 ? `<div class="card">
+      <h2>Comparar decks</h2>
+      <form id="cmp" class="row">
+        <select id="ca" aria-label="Primeiro deck">${deckOptions(decks, decks[0].id)}</select>
+        <select id="cb" aria-label="Segundo deck">${deckOptions(decks, decks[1].id)}</select>
+        <button>Comparar</button>
+      </form>
+    </div>` : ""}
     <div class="card">
       <h2>Passar decks para outro e-mail</h2>
       <form id="tr">
@@ -344,7 +352,105 @@ async function viewDecks() {
       if (mode === "move") setTimeout(route, 1200);
     } catch (err) { document.getElementById("trmsg").innerHTML = `<div class="err">${esc(err.message)}</div>`; }
   };
+  const cmp = document.getElementById("cmp");
+  if (cmp) cmp.onsubmit = (e) => { e.preventDefault(); location.hash = `#/comparar/${cmp.ca.value}/${cmp.cb.value}`; };
   $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => (location.hash = `#/deck/${tr.dataset.id}`)));
+}
+
+const deckOptions = (decks, sel) => decks.map((d) => `<option value="${d.id}" ${String(d.id) === String(sel) ? "selected" : ""}>${esc(d.name || "Deck " + d.id)}</option>`).join("");
+
+// ---------- comparar decks ----------
+
+// Ordem dos grupos da LigaMagic; o resto vai antes de Terrenos, em ordem alfabética.
+const TYPE_ORDER = ["Criaturas", "Planeswalkers", "Mágicas", "Instantâneas", "Feitiços", "Artefatos", "Encantamentos", "Batalhas", "Terrenos"];
+const typeRank = (t) => { const i = TYPE_ORDER.indexOf(t); return i >= 0 ? i : t ? TYPE_ORDER.length - 1.5 : 99; };
+const isLand = (c) => c.type === "Terrenos";
+const byName = (x, y) => x.name.localeCompare(y.name, "pt-BR");
+// Custo de mana: terrenos no fim (como na lista da LigaMagic), desconhecido depois.
+const cmcKey = (c) => (isLand(c) ? 1000 : c.cmc == null ? 2000 : c.cmc);
+const SORTS = {
+  cmc: ["Custo de mana", (x, y) => cmcKey(x) - cmcKey(y) || typeRank(x.type) - typeRank(y.type) || byName(x, y)],
+  type: ["Tipo", (x, y) => typeRank(x.type) - typeRank(y.type) || cmcKey(x) - cmcKey(y) || byName(x, y)],
+  name: ["Nome", byName],
+  price: ["Preço", (x, y) => (y.unit_avg ?? -1) - (x.unit_avg ?? -1) || byName(x, y)],
+  qty: ["Quantidade", (x, y) => Math.max(y.qty_a, y.qty_b) - Math.max(x.qty_a, x.qty_b) || byName(x, y)],
+};
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+// "1RR" -> pílulas de mana; "{R/W}" vira um símbolo só.
+function manaHTML(m, cmc) {
+  if (cmc == null) return '<span class="muted">?</span>';
+  if (!m) return '<span class="muted">—</span>';
+  const syms = m.match(/\{[^}]+\}|\d+|[A-Z]/g) || [];
+  return `<span class="mana" title="Custo ${cmc}">${syms.map((s) => {
+    const v = s.replace(/[{}]/g, "");
+    const c = /^[WUBRGC]$/.test(v) ? v.toLowerCase() : "n";
+    return `<i class="ms ms-${c}">${esc(v)}</i>`;
+  }).join("")}</span>`;
+}
+
+async function viewCompare(aId, bId) {
+  const me = await header();
+  const [decks, data] = await Promise.all([api("GET", "/api/decks"), api("GET", `/api/compare?a=${aId}&b=${bId}`)]);
+  const A = data.a, B = data.b;
+  const nameOf = (d) => d.name || "Deck " + d.id;
+  document.title = `${nameOf(A)} × ${nameOf(B)} · MTG Tracker`;
+  const onlyA = data.cards.filter((c) => c.qty_a > 0 && c.qty_b === 0);
+  const onlyB = data.cards.filter((c) => c.qty_b > 0 && c.qty_a === 0);
+  const diff = data.cards.filter((c) => c.qty_a > 0 && c.qty_b > 0 && c.qty_a !== c.qty_b);
+  const same = data.cards.filter((c) => c.qty_a > 0 && c.qty_a === c.qty_b);
+  // Quanto custa, pelo preço médio, o que falta para montar um deck a partir do outro.
+  const cost = (fromA) => data.cards.reduce((s, c) => s + Math.max(0, fromA ? c.qty_b - c.qty_a : c.qty_a - c.qty_b) * (c.unit_avg || 0), 0);
+  const unknown = data.cards.filter((c) => c.cmc == null).length;
+  let sortKey = SORTS[store.get("cmpSort")] ? store.get("cmpSort") : "cmc";
+
+  $app.innerHTML = `
+    <p><a href="#/">← Meus decks</a></p>
+    <h1>Comparar decks</h1>
+    <div class="card">
+      <form id="cmp2" class="row">
+        <select id="ca" aria-label="Deck A">${deckOptions(decks, A.id)}</select>
+        <button type="button" class="ghost" id="swap" title="Inverter">⇄</button>
+        <select id="cb" aria-label="Deck B">${deckOptions(decks, B.id)}</select>
+        <button>Comparar</button>
+      </form>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="muted small">A · ${esc(nameOf(A))}</span><b>${money(A.total_avg)}</b><span class="muted small">${fmtDay(A.day)}</span></div>
+      <div class="stat"><span class="muted small">B · ${esc(nameOf(B))}</span><b>${money(B.total_avg)}</b><span class="muted small">${fmtDay(B.day)}</span></div>
+      <div class="stat"><span class="muted small">Diferença (B − A)</span><b>${A.total_avg != null && B.total_avg != null ? money(B.total_avg - A.total_avg) : "—"}</b><span class="muted small">${plural(onlyA.length + onlyB.length + diff.length, "carta diferente", "cartas diferentes")}</span></div>
+    </div>
+    <div class="row spread">
+      <p class="muted small" style="margin:0">Para montar B a partir de A: <b>${money(cost(true))}</b> · de A a partir de B: <b>${money(cost(false))}</b> (preço médio)</p>
+      <label class="small row" style="gap:6px">Ordenar por <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortKey ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    </div>
+    ${unknown ? `<p class="muted small">${plural(unknown, "carta ainda sem", "cartas ainda sem")} custo de mana e tipo: eles aparecem depois da próxima coleta dos decks.</p>` : ""}
+    <div id="lists"></div>`;
+
+  const table = (cards, mode) => {
+    if (!cards.length) return '<p class="muted small">Nenhuma.</p>';
+    const qtyHead = mode === "diff" ? '<th class="num">A</th><th class="num">B</th>' : '<th class="num">Qtd</th>';
+    const rows = [...cards].sort(SORTS[sortKey][1]).map((c) => {
+      const q = mode === "diff" ? `<td class="num">${c.qty_a}</td><td class="num">${c.qty_b} <span class="${c.qty_b > c.qty_a ? "up" : "down"} small">(${c.qty_b > c.qty_a ? "+" : ""}${c.qty_b - c.qty_a})</span></td>`
+        : `<td class="num">${mode === "a" ? c.qty_a : c.qty_b}</td>`;
+      return `<tr>${q}<td class="name">${esc(c.name)}${c.board === "side" ? ' <span class="pill">side</span>' : ""}</td>
+        <td>${manaHTML(c.mana, c.cmc)}</td><td class="hide-sm muted small">${esc(c.type || "?")}</td><td class="num">${money(c.unit_avg)}</td></tr>`;
+    }).join("");
+    return `<div class="scroll"><table><thead><tr>${qtyHead}<th>Carta</th><th>Custo</th><th class="hide-sm">Tipo</th><th class="num">Preço un.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  const section = (title, cards, mode, open = true) => `<details class="card cmp" ${open ? "open" : ""}><summary><h2>${title} <span class="pill">${cards.length}</span></h2></summary>${table(cards, mode)}</details>`;
+  const render = () => {
+    document.getElementById("lists").innerHTML =
+      section(`Só em A · ${esc(nameOf(A))}`, onlyA, "a") +
+      section(`Só em B · ${esc(nameOf(B))}`, onlyB, "b") +
+      section("Quantidade diferente", diff, "diff") +
+      section("Em comum", same, "a", false);
+  };
+  render();
+  document.getElementById("sort").onchange = (e) => { sortKey = e.target.value; store.set("cmpSort", sortKey); render(); };
+  const f = document.getElementById("cmp2");
+  f.onsubmit = (e) => { e.preventDefault(); location.hash = `#/comparar/${f.ca.value}/${f.cb.value}`; };
+  document.getElementById("swap").onclick = () => (location.hash = `#/comparar/${B.id}/${A.id}`);
 }
 
 const PERIODS = [["30", "30 dias"], ["90", "90 dias"], ["all", "Tudo"]];
@@ -616,6 +722,8 @@ async function route() {
     if (h === "#/admin") return await viewAdmin();
     let m = h.match(/^#\/p\/([\w-]+)$/);
     if (m) return await viewPublic(m[1]);
+    m = h.match(/^#\/comparar\/(\d+)\/(\d+)$/);
+    if (m) return await viewCompare(m[1], m[2]);
     m = h.match(/^#\/deck\/(\d+)$/);
     if (m) return await viewDeck(m[1]);
     return await viewDecks();

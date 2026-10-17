@@ -70,6 +70,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/public/{token}/card-history", a.public(a.handleCardHistory))
 	mux.HandleFunc("GET /api/public/{token}/export.csv", a.public(a.handleExportCSV))
 
+	mux.HandleFunc("GET /api/compare", a.auth(a.handleCompare))
 	mux.HandleFunc("POST /api/transfer", a.auth(a.handleTransfer))
 	mux.HandleFunc("GET /api/extension", a.handleExtensionInfo)
 	mux.HandleFunc("GET /extensao.zip", a.handleExtensionZip)

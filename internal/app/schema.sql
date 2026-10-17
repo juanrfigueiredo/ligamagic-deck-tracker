@@ -97,3 +97,13 @@ CREATE TABLE IF NOT EXISTS api_keys (
   created_at   INTEGER NOT NULL,
   last_used_at INTEGER
 );
+
+-- Grupo da carta na lista da LigaMagic (Criaturas, Mágicas, Terrenos...) e custo de mana.
+-- Vem nos snapshots e serve para comparar e ordenar. cmc NULL = desconhecido.
+CREATE TABLE IF NOT EXISTS card_info (
+  card_key   TEXT    PRIMARY KEY,
+  type       TEXT    NOT NULL DEFAULT '',
+  cmc        INTEGER,
+  mana       TEXT    NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);

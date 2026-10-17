@@ -26,6 +26,7 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 - **Transferência:** passa os decks para outro e-mail, copiando ou movendo.
 - **Coleta automática:** uma vez por hora, com o Chrome aberto, a extensão abre numa janela minimizada os decks que ainda não têm o preço do dia (cada deck é tentado no máximo uma vez por dia). O ícone mostra quantos faltam.
 - **Página do deck:** período do gráfico (30 dias, 90 dias, tudo), maiores altas e baixas, busca e ordenação de cartas e exportação em CSV.
+- **Comparar decks:** em `#/comparar/A/B`, lista separadamente o que só está em A, só em B, o que muda de quantidade e o que é igual. Ordena por custo de mana (padrão), tipo, nome, preço ou quantidade, e mostra quanto custa montar um a partir do outro. Tipo e custo de mana vêm da própria página do deck na LigaMagic, a partir da coleta seguinte.
 - **Alertas:** e-mail quando o preço médio do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
 - **Link público:** somente leitura, sem login; pode ser desativado a qualquer momento.
 - **Conta:** baixar todos os dados guardados (JSON) e excluir a conta.
@@ -135,6 +136,7 @@ Toda rota, exceto `/api/auth/request`, `/api/auth/verify`, `/api/extension` e `/
 | DELETE | `/api/decks/{id}/share` | desativa o link público |
 | GET | `/api/decks/{id}/export.csv` | histórico em CSV (`;` e vírgula decimal) |
 | GET | `/api/public/{token}/history`, `/cards`, `/card-history`, `/export.csv` | link público, sem login |
+| GET | `/api/compare?a=&b=` | cartas (deck e sideboard) dos últimos snapshots dos dois decks |
 | POST | `/api/transfer` | `{email, mode: "copy"\|"move", deck_ids?}` |
 | GET | `/api/me/key` | se há chave de coleta e quando foi usada |
 | POST | `/api/me/key` | gera a chave (invalida a anterior) → `{key}` |
@@ -151,6 +153,8 @@ Preços sempre em centavos. `null` significa sem oferta no dia.
 Os preços vêm no HTML da página do deck, não de uma requisição JSON:
 
 - totais: `#prices-2-<id>` (mín), `#prices-3-<id>` (médio), `#prices-4-<id>` (máx);
-- cartas: `#dk-val-1-<id> > .pdeck-block .deck-line`, com `.deck-qty`, `.deck-card a[data-lc-id]` e `.pdeck_preco_{2,3,4}_<id>`.
+- cartas: `#dk-val-1-<id> > .pdeck-block .deck-line`, com `.deck-qty`, `.deck-card a[data-lc-id]` e `.pdeck_preco_{2,3,4}_<id>`;
+- grupo (Criaturas, Mágicas, Terrenos...): a linha `.deck-type` anterior;
+- custo de mana: `.deck-cmc abbr.mtg-symbol-*`, com números por extenso (`mtg-symbol-dois`) e cores por letra (`mtg-symbol-r`).
 
 Se a LigaMagic mudar o layout, o ajuste é em `extension/parse.js` (`lmtParseDeck`), usado pela extensão, pelo favorito e pelo coletor. O teste `go test ./cmd/coletor/` lê `cmd/coletor/testdata/deck.html` com ele num Chrome oculto.
