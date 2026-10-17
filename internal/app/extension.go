@@ -54,3 +54,14 @@ func (a *App) handleExtensionZip(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="mtg-tracker-extensao.zip"`)
 	w.Write(extZip)
 }
+
+// GET /parse.js: o parser da extensão, usado pelo site para montar o favorito.
+func (a *App) handleParseJS(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(extension.Files, "parse.js")
+	if err != nil {
+		http.Error(w, "não encontrado", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Write(data)
+}

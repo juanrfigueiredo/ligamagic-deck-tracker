@@ -46,13 +46,16 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/me", a.auth(a.handleMe))
 	mux.HandleFunc("GET /api/me/export", a.auth(a.handleExportAccount))
 	mux.HandleFunc("DELETE /api/me", a.auth(a.handleDeleteAccount))
+	mux.HandleFunc("GET /api/me/key", a.auth(a.handleKeyInfo))
+	mux.HandleFunc("POST /api/me/key", a.auth(a.handleKeyCreate))
+	mux.HandleFunc("DELETE /api/me/key", a.auth(a.handleKeyDelete))
 	mux.HandleFunc("GET /api/admin/stats", a.auth(a.handleAdminStats))
 
-	mux.HandleFunc("GET /api/decks", a.auth(a.handleListDecks))
-	mux.HandleFunc("POST /api/decks", a.auth(a.handleAddDeck))
+	mux.HandleFunc("GET /api/decks", a.authKey(a.handleListDecks))
+	mux.HandleFunc("POST /api/decks", a.authKey(a.handleAddDeck))
 	mux.HandleFunc("DELETE /api/decks/{id}", a.auth(a.handleRemoveDeck))
-	mux.HandleFunc("GET /api/decks/{id}/status", a.auth(a.handleDeckStatus))
-	mux.HandleFunc("POST /api/decks/{id}/snapshot", a.auth(a.handleSnapshot))
+	mux.HandleFunc("GET /api/decks/{id}/status", a.authKey(a.handleDeckStatus))
+	mux.HandleFunc("POST /api/decks/{id}/snapshot", a.authKey(a.handleSnapshot))
 	mux.HandleFunc("GET /api/decks/{id}/history", a.auth(a.tracked(a.handleDeckHistory)))
 	mux.HandleFunc("GET /api/decks/{id}/cards", a.auth(a.tracked(a.handleDeckCards)))
 	mux.HandleFunc("GET /api/decks/{id}/card-history", a.auth(a.tracked(a.handleCardHistory)))
@@ -67,13 +70,18 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/public/{token}/card-history", a.public(a.handleCardHistory))
 	mux.HandleFunc("GET /api/public/{token}/export.csv", a.public(a.handleExportCSV))
 
+	mux.HandleFunc("GET /api/wishlist", a.auth(a.handleWishlist))
+	mux.HandleFunc("POST /api/wishlist", a.auth(a.handleWishlistAdd))
+	mux.HandleFunc("DELETE /api/wishlist/{key}", a.auth(a.handleWishlistRemove))
+	mux.HandleFunc("GET /api/compare", a.auth(a.handleCompare))
 	mux.HandleFunc("POST /api/transfer", a.auth(a.handleTransfer))
 	mux.HandleFunc("GET /api/extension", a.handleExtensionInfo)
 	mux.HandleFunc("GET /extensao.zip", a.handleExtensionZip)
+	mux.HandleFunc("GET /parse.js", a.handleParseJS)
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux.Handle("GET /", http.FileServerFS(sub))
-	return headers(mux)
+	return headers(cors(mux))
 }
 
 // Cleanup apaga códigos e sessões vencidos. Roda na inicialização e a cada 6h.

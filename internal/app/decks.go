@@ -178,6 +178,10 @@ type snapCard struct {
 	Min   *int64 `json:"min"`
 	Avg   *int64 `json:"avg"`
 	Max   *int64 `json:"max"`
+	// Opcionais (extensão 0.4+, favorito, coletor): grupo na lista e custo de mana.
+	Type string  `json:"type"`
+	Cmc  *int64  `json:"cmc"`
+	Mana *string `json:"mana"`
 }
 
 type snapIn struct {
@@ -251,6 +255,7 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 	merged := map[k]*snapCard{}
 	order := []k{}
 	names := map[string]string{}
+	infos := map[string]cardInfo{}
 	for _, c := range in.Cards {
 		c.Key, c.Name = strings.TrimSpace(c.Key), trimName(c.Name)
 		if c.Key == "" || len(c.Key) > 120 || c.Name == "" {
@@ -266,6 +271,9 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 			return
 		}
 		names[c.Key] = c.Name
+		if inf, ok := cardInfoFrom(c); ok {
+			infos[c.Key] = mergeInfo(infos[c.Key], inf)
+		}
 		kk := k{c.Board, c.Key}
 		if m, ok := merged[kk]; ok {
 			m.Qty += c.Qty
@@ -324,6 +332,10 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 			serverErr(w, err)
 			return
 		}
+	}
+	if err := upsertCardInfo(ctx, tx, infos, a.now().Unix()); err != nil {
+		serverErr(w, err)
+		return
 	}
 	for i := 0; i < len(order); i += 100 {
 		chunk := order[i:min(i+100, len(order))]

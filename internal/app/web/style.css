@@ -64,6 +64,29 @@ select { min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); bor
 .filters { margin-bottom: 12px; } .filters input { flex: 2; } .filters select { flex: 1; }
 .stats4 { grid-template-columns: repeat(4, 1fr); }
 .small-chart { height: 200px; }
+h3.small { margin: 16px 0 4px; }
+details { margin-top: 8px; } summary { cursor: pointer; font-weight: 500; }
+.bm { display: inline-block; padding: 9px 16px; border-radius: 8px; background: var(--brand); color: var(--on-brand); text-decoration: none; font-weight: 700; cursor: grab; }
+details.card.cmp > summary { list-style: none; display: flex; align-items: center; }
+details.card.cmp > summary::-webkit-details-marker { display: none; }
+details.card.cmp > summary h2 { margin: 0; } details.card.cmp[open] > summary { margin-bottom: 12px; }
+details.card.cmp > summary::before { content: "▸"; margin-right: 8px; color: var(--muted); }
+details.card.cmp[open] > summary::before { content: "▾"; }
+.mana { display: inline-flex; gap: 2px; white-space: nowrap; }
+.ms { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border-radius: 10px; font: 700 11px/1 system-ui, sans-serif; font-style: normal; border: 1px solid rgba(0,0,0,.25); color: #111; background: #cac5c0; }
+.ms-w { background: #f8f6d8; } .ms-u { background: #aae0fa; } .ms-b { background: #cbc2bf; } .ms-r { background: #f9aa8f; } .ms-g { background: #9bd3ae; } .ms-c { background: #ddd; }
+td.pick, th.pick { width: 28px; padding-right: 0; }
+td.pick input, th.pick input { width: 18px; height: 18px; cursor: pointer; vertical-align: middle; }
+tr.sel { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.pill.wish { text-decoration: none; }
+.buybar { position: sticky; bottom: 0; z-index: 5; display: none; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 -16px; padding: 12px 16px; background: var(--card); border-top: 3px solid var(--brand); box-shadow: 0 -6px 20px rgba(0,0,0,.12); }
+.wishcard { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; text-decoration: none; color: var(--text); font-weight: 400; }
+.wishcard:hover { border-color: var(--brand); }
+tr.fell td:first-child { box-shadow: inset 3px 0 0 var(--down); }
+tr.chartrow td { background: var(--bg); }
+button.small-btn { min-height: 32px; padding: 4px 10px; }
+#key { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; }
 
 @media (max-width: 640px) {
   .grid2 { grid-template-columns: 1fr; gap: 0; }
@@ -73,12 +96,13 @@ select { min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); bor
   h1 { font-size: 20px; }
   .hide-sm { display: none; }
   header nav { flex-wrap: nowrap; gap: 10px; }
-  header nav > a[href="#/extensao"] { display: none; }
   .stats { gap: 8px; }
   .stat { padding: 10px 8px; }
   .stat b { font-size: 16px; }
   .chart { height: 220px; }
   th, td { padding: 10px 4px; }
   form.row button { width: 100%; }
+  .buybar { margin: 0 -12px; padding: 10px 12px; }
+  .buybar .row { width: 100%; } .buybar .row button { flex: 1; }
   .filters input, .filters select { flex: 1 1 100%; }
 }

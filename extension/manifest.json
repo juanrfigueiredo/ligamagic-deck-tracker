@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MTG Tracker (LigaMagic)",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Salva todo dia o histórico de preço dos seus decks da LigaMagic.",
   "permissions": ["storage", "activeTab", "cookies", "alarms"],
   "host_permissions": [
@@ -13,7 +13,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.ligamagic.com.br/*", "https://ligamagic.com.br/*"],
-      "js": ["content.js"],
+      "js": ["parse.js", "content.js"],
       "run_at": "document_idle"
     },
     {

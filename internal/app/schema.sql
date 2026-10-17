@@ -88,3 +88,32 @@ CREATE TABLE IF NOT EXISTS shares (
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_user_deck ON shares (user_id, deck_id);
+
+-- Chave de coleta: usada pelo favorito (bookmarklet) e pelo coletor do computador.
+-- Uma por usuário (gerar outra invalida a anterior). Só vale nas rotas de coleta.
+CREATE TABLE IF NOT EXISTS api_keys (
+  key_hash     TEXT    PRIMARY KEY,
+  user_id      INTEGER NOT NULL UNIQUE,
+  created_at   INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+
+-- Grupo da carta na lista da LigaMagic (Criaturas, Mágicas, Terrenos...) e custo de mana.
+-- Vem nos snapshots e serve para comparar e ordenar. cmc NULL = desconhecido.
+CREATE TABLE IF NOT EXISTS card_info (
+  card_key   TEXT    PRIMARY KEY,
+  type       TEXT    NOT NULL DEFAULT '',
+  cmc        INTEGER,
+  mana       TEXT    NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);
+
+-- Lista de compras: cartas que o usuário quer comprar, com o preço de 1 cópia quando entraram.
+CREATE TABLE IF NOT EXISTS wishlist (
+  user_id    INTEGER NOT NULL,
+  card_key   TEXT    NOT NULL,
+  qty        INTEGER NOT NULL DEFAULT 1,
+  added_avg  INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, card_key)
+);

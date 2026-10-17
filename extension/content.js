@@ -7,47 +7,8 @@
 
   const api = (method, path, body) => chrome.runtime.sendMessage({ type: "api", method, path, body });
 
-  // "R$ 1.773,58" ou "9,70" -> 177358 centavos. 0 ou vazio -> null (sem oferta).
-  const cents = (txt) => {
-    const s = (txt || "").replace(/[^\d,]/g, "").replace(",", ".");
-    if (!s) return null;
-    const v = Math.round(parseFloat(s) * 100);
-    return Number.isFinite(v) && v > 0 ? v : null;
-  };
-
-  function parseDeck() {
-    const root = document.getElementById(`dk-val-1-${deckId}`);
-    const blocks = root ? root.querySelectorAll(":scope > div.pdeck-block") : document.querySelectorAll("div.pdeck-block");
-    if (!blocks.length) return null;
-    const totals = {};
-    for (const [k, i] of [["min", 2], ["avg", 3], ["max", 4]]) {
-      totals[k] = cents(document.getElementById(`prices-${i}-${deckId}`)?.textContent);
-    }
-    const cards = [];
-    // Só os blocos visíveis do container principal; os outros são cópias escondidas.
-    const visible = [...blocks].filter((b) => !b.parentElement.classList.contains("pdeck-block-ax")).slice(0, 2);
-    for (const block of visible) {
-      let board = "main";
-      for (const line of block.querySelectorAll(".deck-line")) {
-        const type = line.querySelector(".deck-type");
-        if (type) {
-          const t = type.textContent.trim().toLowerCase();
-          if (t.startsWith("maybeboard")) board = "maybe";
-          else if (t.startsWith("sideboard")) board = "side";
-          continue;
-        }
-        const qtyEl = line.querySelector(".deck-qty");
-        const link = line.querySelector(".deck-card a");
-        if (!qtyEl || !link) continue;
-        const name = (link.dataset.lcName || link.textContent).trim();
-        const key = link.dataset.lcId ? String(link.dataset.lcId) : "n:" + name;
-        const price = (i) => cents(line.querySelector(`.pdeck_preco_${i}_${deckId}`)?.textContent);
-        cards.push({ key, name, board, qty: parseInt(qtyEl.textContent, 10) || 1, min: price(2), avg: price(3), max: price(4) });
-      }
-    }
-    const name = document.title.split(" - Deck Magic")[0].trim();
-    return { name, totals, cards };
-  }
+  // O parser fica em parse.js (carregado antes deste arquivo), compartilhado com o favorito e o coletor.
+  const parseDeck = () => lmtParseDeck(deckId);
 
   // ---- aviso flutuante na página ----
   function badge(html, buttons = []) {

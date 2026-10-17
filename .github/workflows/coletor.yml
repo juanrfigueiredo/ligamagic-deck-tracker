@@ -1,0 +1,37 @@
+# Compila o coletor e publica os executáveis na release "coletor".
+# O site aponta para releases/download/coletor/<arquivo>, então o link é sempre o da última versão.
+name: coletor
+
+on:
+  push:
+    branches: [main]
+    paths: ["cmd/coletor/**", "extension/parse.js", "go.mod", "go.sum", ".github/workflows/coletor.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./cmd/coletor/
+      - name: Compilar
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/coletor-windows.exe ./cmd/coletor
+          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/coletor-linux ./cmd/coletor
+          GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/coletor-mac-arm64 ./cmd/coletor
+          GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/coletor-mac-intel ./cmd/coletor
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view coletor >/dev/null 2>&1 || gh release create coletor --title "Coletor" --notes "Executáveis do coletor de preços. Veja a Ajuda no site."
+          gh release upload coletor dist/* --clobber

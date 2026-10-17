@@ -96,7 +96,8 @@ async function checkExtension() {
     return false;
   };
   if (!installed) {
-    $banner.innerHTML = `<div class="banner">A extensão do Chrome não está instalada. Sem ela, os preços não são coletados. <a href="#/extensao">Instalar</a></div>`;
+    const key = await api("GET", "/api/me/key").catch(() => null);
+    $banner.innerHTML = key?.exists ? "" : `<div class="banner">Nenhuma forma de coleta configurada: sem ela, os preços não são salvos. <a href="#/ajuda">Ver como</a></div>`;
   } else if (latest && older(installed, latest)) {
     $banner.innerHTML = `<div class="banner">Há uma versão nova da extensão (${esc(latest)}, você tem ${esc(installed)}). <a href="#/extensao">Atualizar</a></div>`;
   } else {
@@ -115,7 +116,7 @@ function viewLogin() {
       <form id="f1" class="row"><input type="email" id="email" placeholder="voce@email.com" required autocomplete="email"><button>Enviar código</button></form>
       <form id="f2" class="row" style="margin-top:12px;display:none"><input type="text" id="code" placeholder="Código de 6 dígitos" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button>Entrar</button></form>
       <div id="msg"></div>
-      <p class="muted small" style="margin-top:16px">Os preços são coletados pela <a href="#/extensao">extensão do Chrome</a>.</p>
+      <p class="muted small" style="margin-top:16px">Veja na <a href="#/ajuda">Ajuda</a> como os preços são coletados.</p>
     </div>`;
   const msg = (t, ok) => (document.getElementById("msg").innerHTML = `<div class="${ok ? "ok" : "err"}">${esc(t)}</div>`);
   const f1 = document.getElementById("f1"), f2 = document.getElementById("f2");
@@ -137,11 +138,97 @@ function viewLogin() {
   };
 }
 
-function viewExtension() {
+// ---------- ajuda: extensão, favorito e coletor ----------
+
+const RELEASE = "https://github.com/juanrfigueiredo/ligamagic-deck-tracker/releases/download/coletor/";
+
+// Monta a URL javascript: do favorito a partir de parse.js + favorito.js.
+// Linhas só de comentário saem; as quebras de linha ficam codificadas (%0A), então o código continua válido.
+async function bookmarkletURL(key) {
+  const [parse, run] = await Promise.all(["/parse.js", "/favorito.js"].map((u) => fetch(u).then((r) => r.text())));
+  const code = (parse + "\n" + run).split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("//")).join("\n");
+  return "javascript:" + encodeURIComponent(`(function(){${code}\nlmtRun(${JSON.stringify(location.origin)},${JSON.stringify(key)});})();`);
+}
+
+async function viewHelp(section) {
+  // A ajuda abre sem login também; só chama header() (que manda para o login) se houver sessão.
+  const logged = await fetch("/api/me", { credentials: "same-origin" }).then((r) => r.ok).catch(() => false);
+  const me = logged ? await header() : null;
+  if (!me) $who.innerHTML = `<a href="#/login" class="small">Entrar</a>`;
+  const keyInfo = me ? await api("GET", "/api/me/key").catch(() => null) : null;
+  const keyStatus = !me ? `<p class="muted small"><a href="#/login">Entre</a> para gerar sua chave.</p>`
+    : keyInfo?.exists ? `<p class="muted small">Você já tem uma chave, criada em ${esc(keyInfo.created_at)}${keyInfo.last_used_at ? `, usada pela última vez em ${esc(keyInfo.last_used_at)}` : ", ainda não usada"}. Ela só aparece na hora em que é gerada: se você guardou, cole abaixo. Gerar outra desliga o favorito e o coletor que usam a antiga.</p>`
+    : `<p class="muted small">Você ainda não tem chave.</p>`;
   $app.innerHTML = `
-    <div class="card" style="max-width:640px;margin:24px auto">
-      <h1>Extensão do Chrome</h1>
-      <p class="muted small">A extensão lê os preços dos decks acompanhados na LigaMagic e envia para cá. Uma vez por dia, com o Chrome aberto, ela abre sozinha numa janela minimizada os decks que ainda não têm o preço do dia.</p>
+    <h1>Ajuda: como coletar os preços</h1>
+    <p class="muted">A LigaMagic não tem API e só aceita acesso do Brasil, então o preço é lido de um navegador seu. Existem três jeitos. Use um ou combine: o histórico guarda no máximo um preço por deck por dia.</p>
+    <div class="card">
+      <div class="scroll"><table>
+        <thead><tr><th>Jeito</th><th>Automático?</th><th class="hide-sm">Onde funciona</th><th>Precisa</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><a href="#/ajuda/coletor">Coletor no computador</a></td><td>Sim, de hora em hora</td><td class="hide-sm">Windows, Linux, Mac</td><td>Computador ligado com Chrome ou Edge</td></tr>
+          <tr><td class="name"><a href="#/ajuda/extensao">Extensão do Chrome</a></td><td>Sim, com o Chrome aberto</td><td class="hide-sm">Chrome no computador</td><td>Instalar a extensão</td></tr>
+          <tr><td class="name"><a href="#/ajuda/favorito">Favorito (bookmarklet)</a></td><td>Não, um toque por deck</td><td class="hide-sm">Qualquer navegador, inclusive no celular</td><td>Nada instalado</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card" id="chave">
+      <h2>Sua chave de coleta</h2>
+      <p class="muted small">O favorito e o coletor usam uma chave em vez do login. Ela só serve para acompanhar decks e salvar preços: não dá acesso à sua conta.</p>
+      ${keyStatus}
+      ${me ? `<div class="row"><button id="genkey" class="${keyInfo?.exists ? "ghost" : ""}">${keyInfo?.exists ? "Gerar nova chave" : "Gerar chave"}</button>
+        ${keyInfo?.exists ? '<button id="delkey" class="danger">Desligar chave</button>' : ""}</div>
+      <div class="row" style="margin-top:12px"><input type="text" id="key" placeholder="lmk_..." autocomplete="off" spellcheck="false"><button class="ghost" id="copykey">Copiar</button></div>
+      <div id="keymsg"></div>` : ""}
+    </div>
+
+    <div class="card" id="coletor">
+      <h2>Coletor no computador (automático)</h2>
+      <p class="muted small">Um programa que roda de hora em hora no seu computador, abre escondido os decks que ainda não têm o preço do dia e envia para cá. Se o computador estiver desligado, ele coleta na próxima hora em que estiver ligado.</p>
+      <ol>
+        <li>Gere a chave acima e copie.</li>
+        <li>Baixe o coletor: <a href="${RELEASE}coletor-windows.exe">Windows</a> · <a href="${RELEASE}coletor-mac-arm64">Mac (M1 ou mais novo)</a> · <a href="${RELEASE}coletor-mac-intel">Mac (Intel)</a> · <a href="${RELEASE}coletor-linux">Linux</a>.</li>
+        <li>Coloque o arquivo numa pasta fixa (por exemplo <code>Documentos\\MTG</code>). O agendamento aponta para esse lugar: se mover depois, rode de novo.</li>
+        <li>Dê dois cliques no arquivo. No Windows, se aparecer "O Windows protegeu o computador", clique em <b>Mais informações</b> e <b>Executar assim mesmo</b> (o programa não é assinado). No Mac, clique com o botão direito e <b>Abrir</b>. No Linux/Mac pelo terminal: <code>chmod +x coletor-*</code> e rode.</li>
+        <li>Cole a chave quando ele pedir e responda <b>S</b> para rodar sozinho de hora em hora.</li>
+        <li>Ele já faz a primeira coleta e mostra o resultado de cada deck. Pronto: na lista de decks aparece <span class="tag ok">✓ hoje</span>.</li>
+      </ol>
+      <details>
+        <summary class="small">Opções e problemas</summary>
+        <ul class="small">
+          <li>O coletor usa o Chrome ou o Edge que já estão instalados. Se não achar, rode com <code>-chrome "caminho\\do\\chrome.exe"</code>.</li>
+          <li>Se o Cloudflare barrar o modo escondido, ele tenta de novo sozinho com a janela fora da tela. Para ver o que acontece, rode com <code>-visivel</code>.</li>
+          <li>Coletar de novo todos os decks, mesmo os que já têm o preço de hoje: <code>-todos</code>.</li>
+          <li>Trocar a chave: <code>-chave lmk_...</code>. Parar o agendamento: <code>-desagendar</code>.</li>
+          <li>O log das execuções automáticas fica em <code>%AppData%\\mtg-tracker\\coletor.log</code> (Windows) ou <code>~/.config/mtg-tracker/coletor.log</code> (Linux).</li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="card" id="favorito">
+      <h2>Favorito (bookmarklet)</h2>
+      <p class="muted small">Um favorito que, tocado na página de um deck da LigaMagic, salva o preço do dia. Funciona no celular e em qualquer navegador, sem instalar nada.</p>
+      <p id="bmwrap" class="muted small">${me ? "Gere ou cole a chave acima para montar o seu favorito." : '<a href="#/login">Entre</a> para montar o seu favorito.'}</p>
+      <h3 class="small">No computador</h3>
+      <ol>
+        <li>Mostre a barra de favoritos (<code>Ctrl+Shift+B</code>).</li>
+        <li>Arraste o botão <b>MTG: salvar preço</b> para a barra.</li>
+        <li>Abra um deck na LigaMagic, espere os preços aparecerem e clique no favorito. Um aviso no canto mostra o preço salvo.</li>
+      </ol>
+      <h3 class="small">No celular (Chrome ou Safari)</h3>
+      <ol>
+        <li>Toque em <b>Copiar código do favorito</b>.</li>
+        <li>Salve qualquer página nos favoritos (estrela no Chrome, botão Compartilhar e <b>Adicionar Favorito</b> no Safari).</li>
+        <li>Edite esse favorito: nome <b>MTG</b> e, no endereço, apague tudo e cole o código.</li>
+        <li>Na página do deck, toque na barra de endereço, digite <b>MTG</b> e toque no favorito que aparece (no Safari, abra pelos Favoritos).</li>
+      </ol>
+      <p class="muted small">Se o deck ainda não estiver na sua lista, ele pergunta se quer acompanhar. Se a LigaMagic bloquear o envio direto, abre uma janelinha deste site que termina o envio (permita pop-ups se o navegador pedir).</p>
+    </div>
+
+    <div class="card" id="extensao">
+      <h2>Extensão do Chrome</h2>
+      <p class="muted small">Lê os preços quando você abre um deck acompanhado e, uma vez por hora com o Chrome aberto, abre sozinha numa janela minimizada os decks que ainda não têm o preço do dia.</p>
       <p><a href="/extensao.zip" download><button>Baixar extensão (.zip)</button></a></p>
       <ol>
         <li>Descompacte o zip. Vai aparecer a pasta <b>mtg-tracker</b>.</li>
@@ -152,11 +239,56 @@ function viewExtension() {
       </ol>
       <p class="muted small">Para atualizar, baixe o zip de novo, substitua a pasta e clique em recarregar no card da extensão em <code>chrome://extensions</code>. O site avisa quando houver versão nova.</p>
     </div>`;
+
+  if (section) document.getElementById(section)?.scrollIntoView();
+  if (!me) return;
+
+  const $key = document.getElementById("key"), $msg = document.getElementById("keymsg"), $bm = document.getElementById("bmwrap");
+  const say = (t, ok) => ($msg.innerHTML = `<div class="${ok ? "ok" : "err"}">${esc(t)}</div>`);
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  };
+  async function buildBookmarklet() {
+    const k = $key.value.trim();
+    if (!/^lmk_[\w-]{20,}$/.test(k)) {
+      $bm.className = "muted small";
+      $bm.textContent = "Gere ou cole a chave acima para montar o seu favorito.";
+      return;
+    }
+    const url = await bookmarkletURL(k);
+    $bm.className = "row";
+    $bm.innerHTML = `<a id="bm" class="bm" title="Arraste para a barra de favoritos">MTG: salvar preço</a><button class="ghost" id="copybm">Copiar código do favorito</button>`;
+    const a = document.getElementById("bm");
+    a.href = url;
+    a.onclick = (e) => { e.preventDefault(); alert("Arraste este botão para a barra de favoritos. Ele só funciona na página de um deck da LigaMagic."); };
+    document.getElementById("copybm").onclick = async (e) => {
+      e.target.textContent = (await copy(url)) ? "Copiado!" : "Não consegui copiar";
+      setTimeout(() => (e.target.textContent = "Copiar código do favorito"), 2000);
+    };
+  }
+  $key.oninput = buildBookmarklet;
+  document.getElementById("copykey").onclick = async () => say((await copy($key.value)) ? "Chave copiada." : "Selecione e copie a chave manualmente.", true);
+  document.getElementById("genkey").onclick = async () => {
+    if (keyInfo?.exists && !confirm("Gerar uma chave nova desliga o favorito e o coletor que usam a antiga. Continuar?")) return;
+    try {
+      const r = await api("POST", "/api/me/key");
+      $key.value = r.key;
+      say("Chave gerada. Guarde em lugar seguro: ela não aparece de novo.", true);
+      buildBookmarklet();
+    } catch (err) { say(err.message); }
+  };
+  const del = document.getElementById("delkey");
+  if (del) del.onclick = async () => {
+    if (!confirm("Desligar a chave? O favorito e o coletor param de funcionar até você gerar outra.")) return;
+    await api("DELETE", "/api/me/key");
+    viewHelp("chave");
+  };
 }
 
 async function header() {
   const me = await api("GET", "/api/me");
   $who.innerHTML = `${me.admin ? '<a href="#/admin" class="small">Painel</a>' : ""}
+    <a href="#/compras" class="small">Compras</a>
     <a href="#/conta" class="small" title="${esc(me.email)}">Conta</a>
     <button class="ghost" id="logout">Sair</button>`;
   document.getElementById("logout").onclick = async () => { await api("POST", "/api/auth/logout"); location.hash = "#/login"; };
@@ -166,8 +298,9 @@ async function header() {
 
 async function viewDecks() {
   await header();
-  const decks = await api("GET", "/api/decks");
+  const [decks, wish] = await Promise.all([api("GET", "/api/decks"), api("GET", "/api/wishlist").catch(() => [])]);
   const pending = decks.filter((d) => !d.snapshot_today).length;
+  const wishDown = wish.filter((c) => c.avg != null && c.added_avg != null && c.avg < c.added_avg).length;
   const rows = decks.map((d) => `
     <tr class="click" data-id="${d.id}">
       <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${d.snapshot_today ? '<span class="tag ok">✓ hoje</span>' : fmtDay(d.last_day)}</span></td>
@@ -178,7 +311,7 @@ async function viewDecks() {
     <div class="card">
       <h2>Acompanhar deck</h2>
       <form id="add" class="row"><input type="text" id="deck" placeholder="URL ou ID do deck na LigaMagic" required><button>Adicionar</button></form>
-      <p class="muted small">A extensão salva o preço de cada deck uma vez por dia.</p>
+      <p class="muted small">O preço de cada deck é salvo uma vez por dia. Veja na <a href="#/ajuda">Ajuda</a> como coletar.</p>
       <div id="addmsg"></div>
     </div>
     <div class="card">
@@ -187,6 +320,16 @@ async function viewDecks() {
         <thead><tr><th>Deck</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
     </div>
+    ${wish.length ? `<a class="card wishcard" href="#/compras"><span><b>Lista de compras</b> · ${plural(wish.length, "carta", "cartas")}</span>
+      <span class="${wishDown ? "tag ok" : "muted small"}">${wishDown ? `▼ ${plural(wishDown, "baixou", "baixaram")} de preço` : "nenhuma baixou ainda"}</span></a>` : ""}
+    ${decks.length >= 2 ? `<div class="card">
+      <h2>Comparar decks</h2>
+      <form id="cmp" class="row">
+        <select id="ca" aria-label="Primeiro deck">${deckOptions(decks, decks[0].id)}</select>
+        <select id="cb" aria-label="Segundo deck">${deckOptions(decks, decks[1].id)}</select>
+        <button>Comparar</button>
+      </form>
+    </div>` : ""}
     <div class="card">
       <h2>Passar decks para outro e-mail</h2>
       <form id="tr">
@@ -213,7 +356,213 @@ async function viewDecks() {
       if (mode === "move") setTimeout(route, 1200);
     } catch (err) { document.getElementById("trmsg").innerHTML = `<div class="err">${esc(err.message)}</div>`; }
   };
+  const cmp = document.getElementById("cmp");
+  if (cmp) cmp.onsubmit = (e) => { e.preventDefault(); location.hash = `#/comparar/${cmp.ca.value}/${cmp.cb.value}`; };
   $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => (location.hash = `#/deck/${tr.dataset.id}`)));
+}
+
+const deckOptions = (decks, sel) => decks.map((d) => `<option value="${d.id}" ${String(d.id) === String(sel) ? "selected" : ""}>${esc(d.name || "Deck " + d.id)}</option>`).join("");
+
+// ---------- comparar decks ----------
+
+// Ordem dos grupos da LigaMagic; o resto vai antes de Terrenos, em ordem alfabética.
+const TYPE_ORDER = ["Criaturas", "Planeswalkers", "Mágicas", "Instantâneas", "Feitiços", "Artefatos", "Encantamentos", "Batalhas", "Terrenos"];
+const typeRank = (t) => { const i = TYPE_ORDER.indexOf(t); return i >= 0 ? i : t ? TYPE_ORDER.length - 1.5 : 99; };
+const isLand = (c) => c.type === "Terrenos";
+const byName = (x, y) => x.name.localeCompare(y.name, "pt-BR");
+// Custo de mana: terrenos no fim (como na lista da LigaMagic), desconhecido depois.
+const cmcKey = (c) => (isLand(c) ? 1000 : c.cmc == null ? 2000 : c.cmc);
+const SORTS = {
+  cmc: ["Custo de mana", (x, y) => cmcKey(x) - cmcKey(y) || typeRank(x.type) - typeRank(y.type) || byName(x, y)],
+  type: ["Tipo", (x, y) => typeRank(x.type) - typeRank(y.type) || cmcKey(x) - cmcKey(y) || byName(x, y)],
+  name: ["Nome", byName],
+  price: ["Preço", (x, y) => (y.unit_avg ?? -1) - (x.unit_avg ?? -1) || byName(x, y)],
+  qty: ["Quantidade", (x, y) => Math.max(y.qty_a, y.qty_b) - Math.max(x.qty_a, x.qty_b) || byName(x, y)],
+};
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+// "1RR" -> pílulas de mana; "{R/W}" vira um símbolo só.
+function manaHTML(m, cmc) {
+  if (cmc == null) return '<span class="muted">?</span>';
+  if (!m) return '<span class="muted">—</span>';
+  const syms = m.match(/\{[^}]+\}|\d+|[A-Z]/g) || [];
+  return `<span class="mana" title="Custo ${cmc}">${syms.map((s) => {
+    const v = s.replace(/[{}]/g, "");
+    const c = /^[WUBRGC]$/.test(v) ? v.toLowerCase() : "n";
+    return `<i class="ms ms-${c}">${esc(v)}</i>`;
+  }).join("")}</span>`;
+}
+
+async function viewCompare(aId, bId) {
+  const me = await header();
+  const [decks, data, wish] = await Promise.all([api("GET", "/api/decks"), api("GET", `/api/compare?a=${aId}&b=${bId}`), api("GET", "/api/wishlist")]);
+  const inWish = new Set(wish.map((w) => w.key));
+  const selected = new Map(); // card key -> quantidade a comprar
+  const A = data.a, B = data.b;
+  const nameOf = (d) => d.name || "Deck " + d.id;
+  document.title = `${nameOf(A)} × ${nameOf(B)} · MTG Tracker`;
+  const onlyA = data.cards.filter((c) => c.qty_a > 0 && c.qty_b === 0);
+  const onlyB = data.cards.filter((c) => c.qty_b > 0 && c.qty_a === 0);
+  const diff = data.cards.filter((c) => c.qty_a > 0 && c.qty_b > 0 && c.qty_a !== c.qty_b);
+  const same = data.cards.filter((c) => c.qty_a > 0 && c.qty_a === c.qty_b);
+  // Quanto custa, pelo preço médio, o que falta para montar um deck a partir do outro.
+  const cost = (fromA) => data.cards.reduce((s, c) => s + Math.max(0, fromA ? c.qty_b - c.qty_a : c.qty_a - c.qty_b) * (c.unit_avg || 0), 0);
+  const unknown = data.cards.filter((c) => c.cmc == null).length;
+  let sortKey = SORTS[store.get("cmpSort")] ? store.get("cmpSort") : "cmc";
+
+  $app.innerHTML = `
+    <p><a href="#/">← Meus decks</a></p>
+    <h1>Comparar decks</h1>
+    <div class="card">
+      <form id="cmp2" class="row">
+        <select id="ca" aria-label="Deck A">${deckOptions(decks, A.id)}</select>
+        <button type="button" class="ghost" id="swap" title="Inverter">⇄</button>
+        <select id="cb" aria-label="Deck B">${deckOptions(decks, B.id)}</select>
+        <button>Comparar</button>
+      </form>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="muted small">A · ${esc(nameOf(A))}</span><b>${money(A.total_avg)}</b><span class="muted small">${fmtDay(A.day)}</span></div>
+      <div class="stat"><span class="muted small">B · ${esc(nameOf(B))}</span><b>${money(B.total_avg)}</b><span class="muted small">${fmtDay(B.day)}</span></div>
+      <div class="stat"><span class="muted small">Diferença (B − A)</span><b>${A.total_avg != null && B.total_avg != null ? money(B.total_avg - A.total_avg) : "—"}</b><span class="muted small">${plural(onlyA.length + onlyB.length + diff.length, "carta diferente", "cartas diferentes")}</span></div>
+    </div>
+    <div class="row spread">
+      <p class="muted small" style="margin:0">Para montar B a partir de A: <b>${money(cost(true))}</b> · de A a partir de B: <b>${money(cost(false))}</b> (preço médio)</p>
+      <label class="small row" style="gap:6px">Ordenar por <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortKey ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    </div>
+    <p class="muted small">Marque as cartas que quer comprar e adicione à <a href="#/compras">lista de compras</a> para acompanhar quando baixarem de preço.</p>
+    ${unknown ? `<p class="muted small">${plural(unknown, "carta ainda sem", "cartas ainda sem")} custo de mana e tipo: eles aparecem depois da próxima coleta dos decks.</p>` : ""}
+    <div id="lists"></div>`;
+
+  // Quantas cópias comprar: o que falta de um lado para o outro.
+  const buyQty = (c, mode) => (mode === "a" ? c.qty_a : mode === "b" ? c.qty_b : Math.abs(c.qty_b - c.qty_a)) || 1;
+  const table = (cards, mode, pick) => {
+    if (!cards.length) return '<p class="muted small">Nenhuma.</p>';
+    const qtyHead = mode === "diff" ? '<th class="num">A</th><th class="num">B</th>' : '<th class="num">Qtd</th>';
+    const rows = [...cards].sort(SORTS[sortKey][1]).map((c) => {
+      const q = mode === "diff" ? `<td class="num">${c.qty_a}</td><td class="num">${c.qty_b} <span class="${c.qty_b > c.qty_a ? "up" : "down"} small">(${c.qty_b > c.qty_a ? "+" : ""}${c.qty_b - c.qty_a})</span></td>`
+        : `<td class="num">${mode === "a" ? c.qty_a : c.qty_b}</td>`;
+      const box = pick ? `<td class="pick"><input type="checkbox" data-key="${esc(c.key)}" data-qty="${buyQty(c, mode)}" aria-label="Selecionar ${esc(c.name)}" ${selected.has(c.key) ? "checked" : ""}></td>` : "";
+      return `<tr class="${selected.has(c.key) ? "sel" : ""}">${box}${q}<td class="name">${esc(c.name)}${c.board === "side" ? ' <span class="pill">side</span>' : ""}${inWish.has(c.key) ? ' <a href="#/compras" class="pill wish" title="Na lista de compras">🛒 na lista</a>' : ""}</td>
+        <td>${manaHTML(c.mana, c.cmc)}</td><td class="hide-sm muted small">${esc(c.type || "?")}</td><td class="num">${money(c.unit_avg)}</td></tr>`;
+    }).join("");
+    const all = pick ? `<th class="pick"><input type="checkbox" class="all" aria-label="Selecionar todas"></th>` : "";
+    return `<div class="scroll"><table><thead><tr>${all}${qtyHead}<th>Carta</th><th>Custo</th><th class="hide-sm">Tipo</th><th class="num">Preço un.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  const section = (title, cards, mode, open = true, pick = true) => `<details class="card cmp" ${open ? "open" : ""}><summary><h2>${title} <span class="pill">${cards.length}</span></h2></summary>${table(cards, mode, pick)}</details>`;
+  const bar = document.createElement("div");
+  bar.className = "buybar";
+  const updateBar = () => {
+    const n = selected.size;
+    const total = data.cards.filter((c) => selected.has(c.key)).reduce((s, c) => s + selected.get(c.key) * (c.unit_avg || 0), 0);
+    bar.innerHTML = n ? `<span><b>${plural(n, "carta selecionada", "cartas selecionadas")}</b> · ${money(total)}</span>
+      <span class="row"><button class="ghost" id="clr">Limpar</button><button id="buy">Adicionar à lista de compras</button></span>` : "";
+    bar.style.display = n ? "flex" : "none";
+    if (!n) return;
+    document.getElementById("clr").onclick = () => { selected.clear(); render(); };
+    document.getElementById("buy").onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        await api("POST", "/api/wishlist", { items: [...selected].map(([key, qty]) => ({ key, qty })) });
+        selected.forEach((_, k) => inWish.add(k));
+        const n2 = selected.size;
+        selected.clear();
+        render();
+        bar.style.display = "flex";
+        bar.innerHTML = `<span class="ok" style="margin:0">${plural(n2, "carta adicionada", "cartas adicionadas")} à lista de compras.</span><a href="#/compras"><button>Ver lista</button></a>`;
+        setTimeout(updateBar, 5000);
+      } catch (err) { alert(err.message); e.target.disabled = false; }
+    };
+  };
+  const render = () => {
+    document.getElementById("lists").innerHTML =
+      section(`Só em A · ${esc(nameOf(A))}`, onlyA, "a") +
+      section(`Só em B · ${esc(nameOf(B))}`, onlyB, "b") +
+      section("Quantidade diferente", diff, "diff") +
+      section("Em comum", same, "a", false, false);
+    document.querySelectorAll("#lists details").forEach((det) => {
+      const boxes = [...det.querySelectorAll("tbody input[type=checkbox]")];
+      const all = det.querySelector("input.all");
+      if (all) all.checked = boxes.length > 0 && boxes.every((b) => b.checked);
+      boxes.forEach((b) => (b.onchange = () => {
+        if (b.checked) selected.set(b.dataset.key, +b.dataset.qty); else selected.delete(b.dataset.key);
+        b.closest("tr").classList.toggle("sel", b.checked);
+        if (all) all.checked = boxes.every((x) => x.checked);
+        updateBar();
+      }));
+      if (all) all.onchange = () => { boxes.forEach((b) => { b.checked = all.checked; b.onchange(); }); };
+    });
+    updateBar();
+  };
+  $app.appendChild(bar);
+  render();
+  document.getElementById("sort").onchange = (e) => { sortKey = e.target.value; store.set("cmpSort", sortKey); render(); };
+  const f = document.getElementById("cmp2");
+  f.onsubmit = (e) => { e.preventDefault(); location.hash = `#/comparar/${f.ca.value}/${f.cb.value}`; };
+  document.getElementById("swap").onclick = () => (location.hash = `#/comparar/${B.id}/${A.id}`);
+}
+
+// ---------- lista de compras ----------
+
+async function viewWishlist() {
+  await header();
+  document.title = "Lista de compras · MTG Tracker";
+  let items = await api("GET", "/api/wishlist");
+  let onlyDown = store.get("wishDown") === "1";
+  let chart = null;
+  const fell = (c) => c.avg != null && c.added_avg != null && c.avg < c.added_avg;
+  const draw = () => {
+    clearCharts();
+    const total = (k) => items.reduce((s, c) => s + (c[k] ?? 0) * c.qty, 0);
+    const down = items.filter(fell);
+    const shown = onlyDown ? down : items;
+    const rows = shown.map((c) => `
+      <tr class="click ${fell(c) ? "fell" : ""}" data-key="${esc(c.key)}">
+        <td class="name">${esc(c.name)} ${fell(c) ? '<span class="tag ok">▼ baixou</span>' : ""}<br><span class="muted small">${manaHTML(c.mana, c.cmc)}</span></td>
+        <td class="num">${c.qty}</td>
+        <td class="num hide-sm">${money(c.added_avg)}<br><span class="muted small">${fmtDay(c.added_day)}</span></td>
+        <td class="num"><b>${money(c.avg)}</b><br><span class="muted small">${c.day ? fmtDay(c.day) : "sem preço"}</span></td>
+        <td class="num">${change(c.avg, c.added_avg)}<br><span class="muted small" title="Em relação ao dia anterior">${c.prev_avg != null ? "dia: " : ""}${c.prev_avg != null ? change(c.avg, c.prev_avg) : ""}</span></td>
+        <td class="num hide-sm">${money(c.low_avg)}</td>
+        <td class="num"><button class="ghost small-btn" data-del="${esc(c.key)}" title="Tirar da lista" aria-label="Tirar ${esc(c.name)} da lista">✕</button></td>
+      </tr>
+      <tr class="chartrow" data-for="${esc(c.key)}" hidden><td colspan="7"><div class="chart small-chart"><canvas></canvas></div></td></tr>`).join("");
+    $app.innerHTML = `
+      <p><a href="#/">← Meus decks</a></p>
+      <h1>Lista de compras</h1>
+      ${items.length ? `
+      <div class="stats">
+        <div class="stat main"><span class="muted small">Total hoje</span><b>${money(total("avg"))}</b><span class="muted small">preço médio × quantidade</span></div>
+        <div class="stat"><span class="muted small">Quando entraram</span><b>${money(total("added_avg"))}</b><span class="muted small">${change(total("avg"), total("added_avg"))}</span></div>
+        <div class="stat"><span class="muted small">Baixaram de preço</span><b>${down.length}</b><span class="muted small">de ${plural(items.length, "carta", "cartas")}</span></div>
+      </div>
+      <div class="card">
+        <div class="row spread"><h2>Cartas</h2><label class="opt small"><input type="checkbox" id="onlydown" ${onlyDown ? "checked" : ""}> Só as que baixaram</label></div>
+        ${shown.length ? `<div class="scroll"><table>
+          <thead><tr><th>Carta</th><th class="num">Qtd</th><th class="num hide-sm">Entrou</th><th class="num">Agora</th><th class="num">Variação</th><th class="num hide-sm">Menor</th><th></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+        <p class="muted small">Preço de 1 cópia, médio, pela última coleta dos decks em que a carta aparece. Clique numa carta para ver o histórico.</p>` : '<p class="muted">Nenhuma carta baixou de preço desde que entrou na lista.</p>'}
+      </div>` : `<div class="card"><p>Sua lista está vazia.</p><p class="muted small">Para adicionar, <a href="#/">compare dois decks</a> e marque as cartas que quer comprar. O preço de cada carta continua sendo atualizado enquanto algum deck acompanhado tiver ela.</p></div>`}`;
+    const od = document.getElementById("onlydown");
+    if (od) od.onchange = () => { onlyDown = od.checked; store.set("wishDown", onlyDown ? "1" : "0"); draw(); };
+    $app.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async (e) => {
+      e.stopPropagation();
+      await api("DELETE", "/api/wishlist/" + encodeURIComponent(b.dataset.del));
+      items = items.filter((c) => c.key !== b.dataset.del);
+      draw();
+    }));
+    $app.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => {
+      const row = $app.querySelector(`tr.chartrow[data-for="${CSS.escape(tr.dataset.key)}"]`);
+      const open = row.hidden;
+      $app.querySelectorAll("tr.chartrow").forEach((r) => (r.hidden = true));
+      if (chart) { chart.destroy(); chart = null; }
+      if (!open) return;
+      row.hidden = false;
+      const c = items.find((x) => x.key === tr.dataset.key);
+      chart = lineChart(row.querySelector("canvas"), c.points);
+    }));
+  };
+  draw();
 }
 
 const PERIODS = [["30", "30 dias"], ["90", "90 dias"], ["all", "Tudo"]];
@@ -477,11 +826,17 @@ async function route() {
   const h = location.hash || "#/";
   try {
     if (h === "#/login") return viewLogin();
-    if (h === "#/extensao") return viewExtension();
+    if (h === "#/extensao") return await viewHelp("extensao");
+    if (h === "#/ajuda") return await viewHelp();
+    if (h === "#/compras") return await viewWishlist();
+    let mh = h.match(/^#\/ajuda\/(\w+)$/);
+    if (mh) return await viewHelp(mh[1]);
     if (h === "#/conta") return await viewAccount();
     if (h === "#/admin") return await viewAdmin();
     let m = h.match(/^#\/p\/([\w-]+)$/);
     if (m) return await viewPublic(m[1]);
+    m = h.match(/^#\/comparar\/(\d+)\/(\d+)$/);
+    if (m) return await viewCompare(m[1], m[2]);
     m = h.match(/^#\/deck\/(\d+)$/);
     if (m) return await viewDeck(m[1]);
     return await viewDecks();

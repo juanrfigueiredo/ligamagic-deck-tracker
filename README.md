@@ -2,7 +2,13 @@
 
 Histórico de preços de decks e cartas da [LigaMagic](https://www.ligamagic.com.br), que não tem API.
 
-A coleta é feita por uma **extensão do Chrome**: quando você abre um deck acompanhado na LigaMagic, ela lê os preços (mínimo, médio e máximo) direto da página e envia para a API. Assim a requisição sai do seu navegador, com IP brasileiro e já passando pelo Cloudflare.
+A LigaMagic só aceita acesso do Brasil e fica atrás do Cloudflare, então os preços (mínimo, médio e máximo) são lidos de um navegador seu e enviados para a API. Há três jeitos, explicados para o usuário em `/#/ajuda`:
+
+- **Extensão do Chrome** (`extension/`): lê o deck quando você abre e coleta sozinha de hora em hora com o Chrome aberto.
+- **Coletor** (`cmd/coletor/`): programa em Go que roda de hora em hora no computador (Agendador de Tarefas ou crontab) e abre os decks num Chrome/Edge oculto via chromedp. Os executáveis saem na release [`coletor`](https://github.com/juanrfigueiredo/ligamagic-deck-tracker/releases/tag/coletor), publicada pelo workflow `.github/workflows/coletor.yml`.
+- **Favorito (bookmarklet)**: montado no site a partir de `extension/parse.js` + `internal/app/web/favorito.js`. Chama a API direto da LigaMagic (CORS liberado só nas rotas de coleta); se a página bloquear, abre `/coleta.html`, que termina o envio.
+
+O coletor e o favorito usam uma **chave de coleta** (`lmk_...`, uma por usuário) que só vale em `GET/POST /api/decks`, `GET /api/decks/{id}/status` e `POST /api/decks/{id}/snapshot`.
 
 ```
 LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Turso
@@ -20,6 +26,8 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 - **Transferência:** passa os decks para outro e-mail, copiando ou movendo.
 - **Coleta automática:** uma vez por hora, com o Chrome aberto, a extensão abre numa janela minimizada os decks que ainda não têm o preço do dia (cada deck é tentado no máximo uma vez por dia). O ícone mostra quantos faltam.
 - **Página do deck:** período do gráfico (30 dias, 90 dias, tudo), maiores altas e baixas, busca e ordenação de cartas e exportação em CSV.
+- **Comparar decks:** em `#/comparar/A/B`, lista separadamente o que só está em A, só em B, o que muda de quantidade e o que é igual. Ordena por custo de mana (padrão), tipo, nome, preço ou quantidade, e mostra quanto custa montar um a partir do outro. Tipo e custo de mana vêm da própria página do deck na LigaMagic, a partir da coleta seguinte.
+- **Lista de compras:** na comparação, marque as cartas que quer comprar. Em `#/compras` cada carta mostra o preço de quando entrou, o de agora, a variação, o menor preço desde então e o histórico. As que baixaram ficam em destaque e no topo. O preço vem dos decks acompanhados em que a carta aparece.
 - **Alertas:** e-mail quando o preço médio do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
 - **Link público:** somente leitura, sem login; pode ser desativado a qualquer momento.
 - **Conta:** baixar todos os dados guardados (JSON) e excluir a conta.
@@ -129,7 +137,14 @@ Toda rota, exceto `/api/auth/request`, `/api/auth/verify`, `/api/extension` e `/
 | DELETE | `/api/decks/{id}/share` | desativa o link público |
 | GET | `/api/decks/{id}/export.csv` | histórico em CSV (`;` e vírgula decimal) |
 | GET | `/api/public/{token}/history`, `/cards`, `/card-history`, `/export.csv` | link público, sem login |
+| GET | `/api/wishlist` | lista de compras com preço de entrada, atual, menor e histórico |
+| POST | `/api/wishlist` | `{items: [{key, qty}]}` adiciona (o preço de entrada é o da primeira vez) |
+| DELETE | `/api/wishlist/{key}` | tira da lista |
+| GET | `/api/compare?a=&b=` | cartas (deck e sideboard) dos últimos snapshots dos dois decks |
 | POST | `/api/transfer` | `{email, mode: "copy"\|"move", deck_ids?}` |
+| GET | `/api/me/key` | se há chave de coleta e quando foi usada |
+| POST | `/api/me/key` | gera a chave (invalida a anterior) → `{key}` |
+| DELETE | `/api/me/key` | desliga a chave |
 | GET | `/api/me/export` | todos os dados da conta (JSON) |
 | DELETE | `/api/me` | `{confirm: "<seu e-mail>"}` exclui a conta |
 | GET | `/api/admin/stats` | painel de uso (só admin) |
@@ -142,6 +157,8 @@ Preços sempre em centavos. `null` significa sem oferta no dia.
 Os preços vêm no HTML da página do deck, não de uma requisição JSON:
 
 - totais: `#prices-2-<id>` (mín), `#prices-3-<id>` (médio), `#prices-4-<id>` (máx);
-- cartas: `#dk-val-1-<id> > .pdeck-block .deck-line`, com `.deck-qty`, `.deck-card a[data-lc-id]` e `.pdeck_preco_{2,3,4}_<id>`.
+- cartas: `#dk-val-1-<id> > .pdeck-block .deck-line`, com `.deck-qty`, `.deck-card a[data-lc-id]` e `.pdeck_preco_{2,3,4}_<id>`;
+- grupo (Criaturas, Mágicas, Terrenos...): a linha `.deck-type` anterior;
+- custo de mana: `.deck-cmc abbr.mtg-symbol-*`, com números por extenso (`mtg-symbol-dois`) e cores por letra (`mtg-symbol-r`).
 
-Se a LigaMagic mudar o layout, o ajuste é em `extension/content.js`, na função `parseDeck`.
+Se a LigaMagic mudar o layout, o ajuste é em `extension/parse.js` (`lmtParseDeck`), usado pela extensão, pelo favorito e pelo coletor. O teste `go test ./cmd/coletor/` lê `cmd/coletor/testdata/deck.html` com ele num Chrome oculto.
