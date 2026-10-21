@@ -64,7 +64,7 @@ async function loadDecks() {
     st.textContent = d.snapshot_today ? "✓ hoje" : "pendente";
     const v = document.createElement("span");
     v.className = "muted";
-    v.textContent = brl(d.total_avg);
+    v.textContent = brl(d.total_min);
     right.append(st, v);
     li.append(a, right);
     ul.appendChild(li);

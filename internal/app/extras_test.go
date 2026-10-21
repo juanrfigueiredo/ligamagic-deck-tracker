@@ -58,7 +58,7 @@ func TestAlertsShareCSV(t *testing.T) {
 	}
 	sent := m.sent
 	do(t, srv, "POST", "/api/decks/42/snapshot", tok, snapWith(12000))
-	if m.sent != sent+1 || m.lastTo != "a@b.com" || !strings.Contains(m.lastSubject, "subiu +19,8%") || !strings.Contains(m.last, "Lightning Bolt") {
+	if m.sent != sent+1 || m.lastTo != "a@b.com" || !strings.Contains(m.lastSubject, "subiu +19,6%") || !strings.Contains(m.last, "Lightning Bolt") {
 		t.Fatalf("alerta não enviado como esperado: %d %q %q", m.sent-sent, m.lastSubject, m.last)
 	}
 	do(t, srv, "POST", "/api/decks/42/snapshot", tok, snapWith(15000))

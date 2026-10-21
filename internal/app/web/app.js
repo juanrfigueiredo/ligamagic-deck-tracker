@@ -46,21 +46,24 @@ function clearCharts() {
 
 const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
+// Só o preço mínimo: é o que importa para comprar.
 function lineChart(canvas, points) {
-  const ds = (label, key, v) => ({
-    label, data: points.map((p) => (p[key] == null ? null : p[key] / 100)),
-    borderColor: cssVar(v), backgroundColor: cssVar(v), borderWidth: v === "--c-avg" ? 3 : 2, tension: 0.2, spanGaps: true, pointRadius: points.length > 40 ? 0 : 3,
-  });
   const c = new Chart(canvas, {
     type: "line",
-    data: { labels: points.map((p) => fmtDay(p.day)), datasets: [ds("Mínimo", "min", "--c-min"), ds("Médio", "avg", "--c-avg"), ds("Máximo", "max", "--c-max")] },
+    data: {
+      labels: points.map((p) => fmtDay(p.day)),
+      datasets: [{
+        label: "Mínimo", data: points.map((p) => (p.min == null ? null : p.min / 100)),
+        borderColor: cssVar("--brand"), backgroundColor: cssVar("--brand"), borderWidth: 3, tension: 0.2, spanGaps: true, pointRadius: points.length > 40 ? 0 : 3,
+      }],
+    },
     options: {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: { y: { ticks: { callback: (v) => brl.format(v), color: cssVar("--muted") }, grid: { color: cssVar("--line") } },
                 x: { ticks: { color: cssVar("--muted"), maxTicksLimit: innerWidth < 640 ? 5 : 10, maxRotation: 0 }, grid: { display: false } } },
-      plugins: { legend: { labels: { color: cssVar("--text") } },
-                 tooltip: { callbacks: { label: (i) => `${i.dataset.label}: ${i.raw == null ? "—" : brl.format(i.raw)}` } } },
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: (i) => `Mínimo: ${i.raw == null ? "sem oferta" : brl.format(i.raw)}` } } },
     },
   });
   charts.push(c);
@@ -171,8 +174,8 @@ async function viewDecks() {
   const rows = decks.map((d) => `
     <tr class="click" data-id="${d.id}">
       <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${d.snapshot_today ? '<span class="tag ok">✓ hoje</span>' : fmtDay(d.last_day)}</span></td>
-      <td class="num hide-sm">${money(d.total_min)}</td><td class="num">${money(d.total_avg)}</td><td class="num hide-sm">${money(d.total_max)}</td>
-      <td class="num">${change(d.total_avg, d.prev_avg)}</td>
+      <td class="num">${money(d.total_min)}</td>
+      <td class="num">${change(d.total_min, d.prev_min)}</td>
     </tr>`).join("");
   $app.innerHTML = `
     <div class="card">
@@ -184,7 +187,7 @@ async function viewDecks() {
     <div class="card">
       <h2>Meus decks ${decks.length ? `<span class="pill">${pending ? plural(pending, "pendente hoje", "pendentes hoje") : "todos atualizados hoje"}</span>` : ""}</h2>
       ${decks.length ? `<div class="scroll"><table>
-        <thead><tr><th>Deck</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
+        <thead><tr><th>Deck</th><th class="num">Mínimo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
     </div>
     <div class="card">
@@ -232,16 +235,15 @@ async function renderDeck(base, owner) {
   const [hist, cards] = await Promise.all([api("GET", `${base}/history`), api("GET", `${base}/cards`)]);
   const last = hist.points[hist.points.length - 1] || {};
   const prev = hist.points[hist.points.length - 2] || {};
-  const stat = (label, key) => `<div class="stat${key === "avg" ? " main" : ""}"><span class="muted small">${label}</span><b>${money(last[key])}</b>${change(last[key], prev[key])}</div>`;
   const title = hist.name || "Deck " + hist.id;
   document.title = `${title} · MTG Tracker`;
 
-  // Maiores altas e baixas pelo preço médio da linha.
-  const moved = cards.cards.map((c) => ({ ...c, p: pct(c.avg, c.prev_avg) })).filter((c) => c.p != null && Math.abs(c.p) >= 0.05);
+  // Maiores altas e baixas pelo preço mínimo da linha.
+  const moved = cards.cards.map((c) => ({ ...c, p: pct(c.min, c.prev_min) })).filter((c) => c.p != null && Math.abs(c.p) >= 0.05);
   const ups = moved.filter((c) => c.p > 0).sort((a, b) => b.p - a.p).slice(0, 5);
   const downs = moved.filter((c) => c.p < 0).sort((a, b) => a.p - b.p).slice(0, 5);
   const moverList = (list, empty) => list.length
-    ? `<ul class="movers">${list.map((c) => `<li data-key="${esc(c.key)}"><span>${esc(c.name)}</span><span>${money(c.avg)} ${change(c.avg, c.prev_avg)}</span></li>`).join("")}</ul>`
+    ? `<ul class="movers">${list.map((c) => `<li data-key="${esc(c.key)}"><span>${esc(c.name)}</span><span>${money(c.min)} ${change(c.min, c.prev_min)}</span></li>`).join("")}</ul>`
     : `<p class="muted small">${empty}</p>`;
 
   $app.innerHTML = `
@@ -251,9 +253,9 @@ async function renderDeck(base, owner) {
       · <a href="${esc(hist.url)}" target="_blank" rel="noopener">abrir na LigaMagic</a>
       ${hist.points.length ? ` · <a href="${base}/export.csv" download>exportar CSV</a>` : ""}</p>
     ${hist.points.length ? `
-      <div class="stats">${stat("Mínimo", "min")}${stat("Médio", "avg")}${stat("Máximo", "max")}</div>
       <div class="card">
-        <div class="row spread"><h2>Preço do deck</h2>
+        <div class="row spread"><div><span class="muted small">Preço mínimo do deck</span>
+          <div class="big">${money(last.min)} ${change(last.min, prev.min)}</div></div>
           <div class="seg" id="period">${PERIODS.map(([v, l]) => `<button class="ghost" data-p="${v}">${l}</button>`).join("")}</div></div>
         <div class="chart"><canvas id="deckChart"></canvas></div>
       </div>
@@ -266,7 +268,7 @@ async function renderDeck(base, owner) {
         <div class="row filters">
           <input type="text" id="q" placeholder="Buscar carta" autocomplete="off">
           <select id="sort" aria-label="Ordenar">
-            <option value="avg">Maior preço</option><option value="up">Maior alta</option><option value="down">Maior baixa</option><option value="name">Nome</option>
+            <option value="price">Maior preço</option><option value="up">Maior alta</option><option value="down">Maior baixa</option><option value="name">Nome</option>
           </select>
         </div>
         <div id="tables"></div>
@@ -276,7 +278,7 @@ async function renderDeck(base, owner) {
     ${owner ? `
       <div class="card">
         <h2>Alerta por e-mail</h2>
-        <div class="row"><label for="alert" class="small">Avisar quando o preço médio do deck variar</label>
+        <div class="row"><label for="alert" class="small">Avisar quando o preço mínimo do deck variar</label>
           <select id="alert">${[["", "desligado"], ...[5, 10, 15, 20, 30, 50].map((n) => [n, `${n}% ou mais`])]
             .map(([v, l]) => `<option value="${v}" ${String(hist.alert_pct ?? "") === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select></div>
         <div id="alertmsg"></div>
@@ -315,9 +317,9 @@ async function renderDeck(base, owner) {
 
   // Tabela com busca e ordenação
   const sorters = {
-    avg: (a, b) => (b.avg ?? -1) - (a.avg ?? -1),
-    up: (a, b) => (pct(b.avg, b.prev_avg) ?? -Infinity) - (pct(a.avg, a.prev_avg) ?? -Infinity),
-    down: (a, b) => (pct(a.avg, a.prev_avg) ?? Infinity) - (pct(b.avg, b.prev_avg) ?? Infinity),
+    price: (a, b) => (b.min ?? -1) - (a.min ?? -1),
+    up: (a, b) => (pct(b.min, b.prev_min) ?? -Infinity) - (pct(a.min, a.prev_min) ?? -Infinity),
+    down: (a, b) => (pct(a.min, a.prev_min) ?? Infinity) - (pct(b.min, b.prev_min) ?? Infinity),
     name: (a, b) => a.name.localeCompare(b.name, "pt-BR"),
   };
   const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -330,12 +332,12 @@ async function renderDeck(base, owner) {
     document.getElementById("tables").innerHTML = order.length ? order.map((board) => `
       <h2>${BOARD[board]} <span class="pill">${plural(groups[board].reduce((s, c) => s + c.qty, 0), "carta", "cartas")}</span></h2>
       <div class="scroll"><table>
-        <thead><tr><th class="num">Qtd</th><th>Carta</th><th class="num hide-sm">Mínimo</th><th class="num">Médio</th><th class="num hide-sm">Máximo</th><th class="num">Variação</th></tr></thead>
+        <thead><tr><th class="num">Qtd</th><th>Carta</th><th class="num">Mínimo</th><th class="num">Variação</th></tr></thead>
         <tbody>${groups[board].map((c) => `
           <tr class="click" data-key="${esc(c.key)}">
             <td class="num">${c.qty}</td><td class="name">${esc(c.name)}</td>
-            <td class="num hide-sm">${money(c.min)}</td><td class="num">${money(c.avg)}</td><td class="num hide-sm">${money(c.max)}</td>
-            <td class="num">${change(c.avg, c.prev_avg)}</td>
+            <td class="num">${money(c.min)}</td>
+            <td class="num">${change(c.min, c.prev_min)}</td>
           </tr>`).join("")}</tbody></table></div>`).join("") : `<p class="muted">Nenhuma carta encontrada.</p>`;
     document.querySelectorAll("#tables tr[data-key]").forEach((tr) => (tr.onclick = () => showCard(tr.dataset.key)));
   };
@@ -351,7 +353,7 @@ function wireOwner(hist) {
     try {
       const v = e.target.value;
       await api("PUT", `/api/decks/${id}/alert`, { pct: v ? Number(v) : null });
-      box.innerHTML = `<div class="ok">${v ? `Você vai receber um e-mail quando o deck variar ${v}% ou mais de um dia para o outro.` : "Alerta desligado."}</div>`;
+      box.innerHTML = `<div class="ok">${v ? `Você vai receber um e-mail quando o preço mínimo do deck variar ${v}% ou mais de um dia para o outro.` : "Alerta desligado."}</div>`;
     } catch (err) { box.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
   };
 

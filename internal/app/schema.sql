@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS snapshot_cards (
 );
 CREATE INDEX IF NOT EXISTS idx_snapshot_cards_card ON snapshot_cards (card_key);
 
--- Alerta por e-mail quando o preço médio do deck varia pct% ou mais em relação ao snapshot anterior.
+-- Alerta por e-mail quando o preço mínimo do deck varia pct% ou mais em relação ao snapshot anterior.
 CREATE TABLE IF NOT EXISTS alerts (
   user_id       INTEGER NOT NULL,
   deck_id       INTEGER NOT NULL,

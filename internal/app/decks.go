@@ -45,7 +45,7 @@ type deckSummary struct {
 	TotalMin *int64 `json:"total_min"`
 	TotalAvg *int64 `json:"total_avg"`
 	TotalMax *int64 `json:"total_max"`
-	PrevAvg  *int64 `json:"prev_avg"`
+	PrevMin  *int64 `json:"prev_min"`
 	// SnapshotToday indica se o preço de hoje já foi salvo (a extensão usa para a coleta automática).
 	SnapshotToday bool `json:"snapshot_today"`
 }
@@ -54,7 +54,7 @@ type deckSummary struct {
 func (a *App) handleListDecks(w http.ResponseWriter, r *http.Request, u user) {
 	rows, err := a.db.QueryContext(r.Context(), `
 		SELECT d.id, d.name, s.day, s.total_min, s.total_avg, s.total_max,
-		  (SELECT p.total_avg FROM snapshots p WHERE p.deck_id = d.id AND p.day < s.day ORDER BY p.day DESC LIMIT 1)
+		  (SELECT p.total_min FROM snapshots p WHERE p.deck_id = d.id AND p.day < s.day ORDER BY p.day DESC LIMIT 1)
 		FROM user_decks ud
 		JOIN decks d ON d.id = ud.deck_id
 		LEFT JOIN snapshots s ON s.id = (SELECT x.id FROM snapshots x WHERE x.deck_id = d.id ORDER BY x.day DESC LIMIT 1)
@@ -76,7 +76,7 @@ func (a *App) handleListDecks(w http.ResponseWriter, r *http.Request, u user) {
 			return
 		}
 		d.URL, d.LastDay, d.SnapshotToday = deckURL(d.ID), day.String, day.String == today
-		d.TotalMin, d.TotalAvg, d.TotalMax, d.PrevAvg = nullPtr(mn), nullPtr(av), nullPtr(mx), nullPtr(prev)
+		d.TotalMin, d.TotalAvg, d.TotalMax, d.PrevMin = nullPtr(mn), nullPtr(av), nullPtr(mx), nullPtr(prev)
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {
@@ -404,10 +404,10 @@ type cardRow struct {
 	Min     *int64 `json:"min"`
 	Avg     *int64 `json:"avg"`
 	Max     *int64 `json:"max"`
-	PrevAvg *int64 `json:"prev_avg"`
+	PrevMin *int64 `json:"prev_min"`
 }
 
-// GET /api/decks/{id}/cards -> cartas do snapshot mais recente + preço médio do anterior
+// GET /api/decks/{id}/cards -> cartas do snapshot mais recente + preço mínimo do anterior
 func (a *App) handleDeckCards(w http.ResponseWriter, r *http.Request, u user, id int64) {
 	ctx := r.Context()
 	var latestID int64
@@ -426,12 +426,12 @@ func (a *App) handleDeckCards(w http.ResponseWriter, r *http.Request, u user, id
 	a.db.QueryRowContext(ctx, `SELECT id, day FROM snapshots WHERE deck_id = ? AND day < ? ORDER BY day DESC LIMIT 1`, id, day).Scan(&prevID, &prevDay)
 
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT sc.card_key, c.name, sc.board, sc.qty, sc.price_min, sc.price_avg, sc.price_max, p.price_avg
+		SELECT sc.card_key, c.name, sc.board, sc.qty, sc.price_min, sc.price_avg, sc.price_max, p.price_min
 		FROM snapshot_cards sc
 		JOIN cards c ON c.card_key = sc.card_key
 		LEFT JOIN snapshot_cards p ON p.snapshot_id = ? AND p.board = sc.board AND p.card_key = sc.card_key
 		WHERE sc.snapshot_id = ?
-		ORDER BY CASE sc.board WHEN 'main' THEN 0 WHEN 'side' THEN 1 ELSE 2 END, sc.price_avg DESC, c.name`,
+		ORDER BY CASE sc.board WHEN 'main' THEN 0 WHEN 'side' THEN 1 ELSE 2 END, sc.price_min DESC, c.name`,
 		prevID, latestID)
 	if err != nil {
 		serverErr(w, err)
@@ -446,7 +446,7 @@ func (a *App) handleDeckCards(w http.ResponseWriter, r *http.Request, u user, id
 			serverErr(w, err)
 			return
 		}
-		c.Min, c.Avg, c.Max, c.PrevAvg = nullPtr(mn), nullPtr(av), nullPtr(mx), nullPtr(pv)
+		c.Min, c.Avg, c.Max, c.PrevMin = nullPtr(mn), nullPtr(av), nullPtr(mx), nullPtr(pv)
 		out = append(out, c)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"day": day, "prev_day": prevDay.String, "cards": out})

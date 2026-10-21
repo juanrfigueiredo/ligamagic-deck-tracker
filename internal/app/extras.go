@@ -58,7 +58,7 @@ type mover struct {
 	Variance float64
 }
 
-// checkAlerts roda depois de cada snapshot. Compara o preço médio de hoje com o do snapshot anterior
+// checkAlerts roda depois de cada snapshot. Compara o preço mínimo de hoje com o do snapshot anterior
 // e manda no máximo 1 e-mail por dia para cada usuário cujo limite foi atingido.
 func (a *App) checkAlerts(ctx context.Context, deckID int64) {
 	today := a.today()
@@ -67,12 +67,12 @@ func (a *App) checkAlerts(ctx context.Context, deckID int64) {
 	var curID, prevID int64
 	var prevDay string
 	if err := a.db.QueryRowContext(ctx,
-		`SELECT s.id, s.total_avg, d.name FROM snapshots s JOIN decks d ON d.id = s.deck_id WHERE s.deck_id = ? AND s.day = ?`,
+		`SELECT s.id, s.total_min, d.name FROM snapshots s JOIN decks d ON d.id = s.deck_id WHERE s.deck_id = ? AND s.day = ?`,
 		deckID, today).Scan(&curID, &cur, &name); err != nil {
 		return
 	}
 	if err := a.db.QueryRowContext(ctx,
-		`SELECT id, total_avg, day FROM snapshots WHERE deck_id = ? AND day < ? ORDER BY day DESC LIMIT 1`,
+		`SELECT id, total_min, day FROM snapshots WHERE deck_id = ? AND day < ? ORDER BY day DESC LIMIT 1`,
 		deckID, today).Scan(&prevID, &prev, &prevDay); err != nil {
 		return
 	}
@@ -117,8 +117,8 @@ func (a *App) checkAlerts(ctx context.Context, deckID int64) {
 	}
 	link := fmt.Sprintf("%s/#/deck/%d", a.baseURL, deckID)
 	subject := fmt.Sprintf("%s %s %s", name, dir, fmtPct(change))
-	text := fmt.Sprintf("O preço médio de %s %s %s: de %s (%s) para %s (hoje).\n", name, dir, fmtPct(change), fmtBRL(prev.Int64), fmtDay(prevDay), fmtBRL(cur.Int64))
-	htm := fmt.Sprintf("<p>O preço médio de <b>%s</b> %s <b>%s</b>: de %s (%s) para <b>%s</b> (hoje).</p>",
+	text := fmt.Sprintf("O preço mínimo de %s %s %s: de %s (%s) para %s (hoje).\n", name, dir, fmtPct(change), fmtBRL(prev.Int64), fmtDay(prevDay), fmtBRL(cur.Int64))
+	htm := fmt.Sprintf("<p>O preço mínimo de <b>%s</b> %s <b>%s</b>: de %s (%s) para <b>%s</b> (hoje).</p>",
 		html.EscapeString(name), dir, fmtPct(change), fmtBRL(prev.Int64), fmtDay(prevDay), fmtBRL(cur.Int64))
 	if len(movers) > 0 {
 		text += "\nCartas que mais mudaram:\n"
@@ -141,13 +141,13 @@ func (a *App) checkAlerts(ctx context.Context, deckID int64) {
 	}
 }
 
-// topMovers devolve as cartas cujo preço médio da linha mais variou entre dois snapshots.
+// topMovers devolve as cartas cujo preço mínimo da linha mais variou entre dois snapshots.
 func (a *App) topMovers(ctx context.Context, curID, prevID int64, n int) []mover {
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT c.name, p.price_avg, sc.price_avg FROM snapshot_cards sc
+		SELECT c.name, p.price_min, sc.price_min FROM snapshot_cards sc
 		JOIN snapshot_cards p ON p.snapshot_id = ? AND p.board = sc.board AND p.card_key = sc.card_key
 		JOIN cards c ON c.card_key = sc.card_key
-		WHERE sc.snapshot_id = ? AND sc.price_avg IS NOT NULL AND p.price_avg > 0`, prevID, curID)
+		WHERE sc.snapshot_id = ? AND sc.price_min IS NOT NULL AND p.price_min > 0`, prevID, curID)
 	if err != nil {
 		return nil
 	}

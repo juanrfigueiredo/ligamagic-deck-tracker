@@ -19,8 +19,9 @@ LigaMagic (seu navegador) ──extensão──▶ API Go (Render) ──▶ Tur
 - **Gráficos:** do total do deck e de cada carta, com a variação em relação ao dia anterior.
 - **Transferência:** passa os decks para outro e-mail, copiando ou movendo.
 - **Coleta automática:** uma vez por hora, com o Chrome aberto, a extensão abre numa janela minimizada os decks que ainda não têm o preço do dia (cada deck é tentado no máximo uma vez por dia). O ícone mostra quantos faltam.
+- **Só o preço mínimo:** gráficos, variação, altas e baixas e alertas usam o preço mínimo. Médio e máximo continuam salvos e saem no CSV.
 - **Página do deck:** período do gráfico (30 dias, 90 dias, tudo), maiores altas e baixas, busca e ordenação de cartas e exportação em CSV.
-- **Alertas:** e-mail quando o preço médio do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
+- **Alertas:** e-mail quando o preço mínimo do deck varia X% ou mais de um snapshot para o outro (no máximo 1 por dia).
 - **Link público:** somente leitura, sem login; pode ser desativado a qualquer momento.
 - **Conta:** baixar todos os dados guardados (JSON) e excluir a conta.
 - **Painel de uso:** para os e-mails em `ADMIN_EMAILS`, em `#/admin`.

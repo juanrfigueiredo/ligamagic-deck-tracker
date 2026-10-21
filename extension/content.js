@@ -84,7 +84,7 @@
   async function readDeck() {
     for (let i = 0; i < 10; i++) {
       const snap = parseDeck();
-      if (snap && snap.cards.length && snap.totals.avg != null) return snap;
+      if (snap && snap.cards.length && snap.totals.min != null) return snap;
       await new Promise((r) => setTimeout(r, 1000));
     }
     return parseDeck();
@@ -102,7 +102,7 @@
     }
     const r = await api("POST", `/api/decks/${deckId}/snapshot`, snap);
     if (r.ok) {
-      const host = notice(`Preço de hoje salvo: <b>${fmt(snap.totals.avg)}</b> (médio), ${r.data.cards} cartas.`);
+      const host = notice(`Preço de hoje salvo: <b>${fmt(snap.totals.min)}</b> (mínimo), ${r.data.cards} cartas.`);
       if (host) setTimeout(() => host.remove(), 6000);
     } else {
       notice("Erro ao salvar: " + (r.data.error || r.status));
