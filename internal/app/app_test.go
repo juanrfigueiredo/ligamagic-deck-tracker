@@ -201,3 +201,17 @@ func TestExtensionZip(t *testing.T) {
 		}
 	}
 }
+
+func TestStaticAssets(t *testing.T) {
+	srv, _ := setup(t)
+	for path, ctype := range map[string]string{"/fonts/inter.woff2": "font/woff2", "/icons.svg": "image/svg+xml", "/style.css": "text/css; charset=utf-8"} {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 || res.Header.Get("Content-Type") != ctype {
+			t.Errorf("%s: %d %q", path, res.StatusCode, res.Header.Get("Content-Type"))
+		}
+	}
+}

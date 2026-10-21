@@ -1,7 +1,7 @@
 // Service worker mínimo para o site poder ser instalado como app.
 // Rede primeiro; o cache só serve a casca do site quando estiver offline. A API nunca é cacheada.
-const CACHE = "mtg-shell-v1";
-const SHELL = ["/", "/app.js", "/style.css", "/manifest.json", "/icon.svg", "/icon-192.png"];
+const CACHE = "mtg-shell-v2";
+const SHELL = ["/", "/app.js", "/style.css", "/manifest.json", "/icons.svg", "/fonts/inter.woff2", "/icon.svg", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

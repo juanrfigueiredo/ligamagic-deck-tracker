@@ -10,6 +10,8 @@ const fmtDay = (d) => (d ? d.split("-").reverse().join("/") : "—");
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const BOARD = { main: "Deck", side: "Sideboard", maybe: "Maybeboard" };
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// Ícones Lucide do sprite /icons.svg
+const icon = (name, cls = "") => `<svg class="i ${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
 let charts = [];
 
 async function api(method, path, body) {
@@ -46,24 +48,41 @@ function clearCharts() {
 
 const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
+// Cor do CSS com transparência, para o preenchimento abaixo da linha.
+function alpha(hex, a) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
 // Só o preço mínimo: é o que importa para comprar.
 function lineChart(canvas, points) {
+  const brand = cssVar("--brand");
+  const fill = (ctx) => {
+    const { chartArea, ctx: g } = ctx.chart;
+    if (!chartArea) return alpha(brand, 0.15);
+    const grad = g.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    grad.addColorStop(0, alpha(brand, 0.28));
+    grad.addColorStop(1, alpha(brand, 0));
+    return grad;
+  };
   const c = new Chart(canvas, {
     type: "line",
     data: {
       labels: points.map((p) => fmtDay(p.day)),
       datasets: [{
         label: "Mínimo", data: points.map((p) => (p.min == null ? null : p.min / 100)),
-        borderColor: cssVar("--brand"), backgroundColor: cssVar("--brand"), borderWidth: 3, tension: 0.2, spanGaps: true, pointRadius: points.length > 40 ? 0 : 3,
+        borderColor: brand, backgroundColor: fill, fill: true, borderWidth: 2.5, tension: 0.15, spanGaps: true,
+        pointRadius: points.length > 20 ? 0 : 3, pointBackgroundColor: brand, pointHoverRadius: 5,
       }],
     },
     options: {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: { y: { ticks: { callback: (v) => brl.format(v), color: cssVar("--muted") }, grid: { color: cssVar("--line") } },
-                x: { ticks: { color: cssVar("--muted"), maxTicksLimit: innerWidth < 640 ? 5 : 10, maxRotation: 0 }, grid: { display: false } } },
+                x: { ticks: { color: cssVar("--muted"), maxTicksLimit: canvas.parentElement.clientWidth < 500 ? 4 : 8, maxRotation: 0,
+                           callback(v) { return this.getLabelForValue(v).slice(0, 5); } }, grid: { display: false } } },
       plugins: { legend: { display: false },
-                 tooltip: { callbacks: { label: (i) => `Mínimo: ${i.raw == null ? "sem oferta" : brl.format(i.raw)}` } } },
+                 tooltip: { displayColors: false, callbacks: { label: (i) => `Mínimo: ${i.raw == null ? "sem oferta" : brl.format(i.raw)}` } } },
     },
   });
   charts.push(c);
@@ -99,9 +118,9 @@ async function checkExtension() {
     return false;
   };
   if (!installed) {
-    $banner.innerHTML = `<div class="banner">A extensão do Chrome não está instalada. Sem ela, os preços não são coletados. <a href="#/extensao">Instalar</a></div>`;
+    $banner.innerHTML = `<div class="banner">${icon("puzzle")} A extensão do Chrome não está instalada. Sem ela, os preços não são coletados. <a href="#/extensao">Instalar</a></div>`;
   } else if (latest && older(installed, latest)) {
-    $banner.innerHTML = `<div class="banner">Há uma versão nova da extensão (${esc(latest)}, você tem ${esc(installed)}). <a href="#/extensao">Atualizar</a></div>`;
+    $banner.innerHTML = `<div class="banner">${icon("refresh-cw")} Há uma versão nova da extensão (${esc(latest)}, você tem ${esc(installed)}). <a href="#/extensao">Atualizar</a></div>`;
   } else {
     $banner.innerHTML = "";
   }
@@ -113,9 +132,10 @@ function viewLogin() {
   $who.innerHTML = "";
   $app.innerHTML = `
     <div class="card" style="max-width:420px;margin:40px auto">
+      <div class="login-icon">${icon("chart-line", "xl")}</div>
       <h1>Entrar</h1>
       <p class="muted small">Digite seu e-mail. Você recebe um código de uso único e fica conectado por 30 dias.</p>
-      <form id="f1" class="row"><input type="email" id="email" placeholder="voce@email.com" required autocomplete="email"><button>Enviar código</button></form>
+      <form id="f1" class="row"><input type="email" id="email" placeholder="voce@email.com" required autocomplete="email"><button>${icon("mail")} Enviar código</button></form>
       <form id="f2" class="row" style="margin-top:12px;display:none"><input type="text" id="code" placeholder="Código de 6 dígitos" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button>Entrar</button></form>
       <div id="msg"></div>
       <p class="muted small" style="margin-top:16px">Os preços são coletados pela <a href="#/extensao">extensão do Chrome</a>.</p>
@@ -143,9 +163,9 @@ function viewLogin() {
 function viewExtension() {
   $app.innerHTML = `
     <div class="card" style="max-width:640px;margin:24px auto">
-      <h1>Extensão do Chrome</h1>
+      <h1>${icon("puzzle")} Extensão do Chrome</h1>
       <p class="muted small">A extensão lê os preços dos decks acompanhados na LigaMagic e envia para cá. Uma vez por dia, com o Chrome aberto, ela abre sozinha numa janela minimizada os decks que ainda não têm o preço do dia.</p>
-      <p><a href="/extensao.zip" download><button>Baixar extensão (.zip)</button></a></p>
+      <p><a href="/extensao.zip" download><button>${icon("download")} Baixar extensão (.zip)</button></a></p>
       <ol>
         <li>Descompacte o zip. Vai aparecer a pasta <b>mtg-tracker</b>.</li>
         <li>Abra <code>chrome://extensions</code> e ative o <b>Modo do desenvolvedor</b> (canto superior direito).</li>
@@ -159,9 +179,9 @@ function viewExtension() {
 
 async function header() {
   const me = await api("GET", "/api/me");
-  $who.innerHTML = `${me.admin ? '<a href="#/admin" class="small">Painel</a>' : ""}
-    <a href="#/conta" class="small" title="${esc(me.email)}">Conta</a>
-    <button class="ghost" id="logout">Sair</button>`;
+  $who.innerHTML = `${me.admin ? `<a href="#/admin" class="navlink">${icon("chart-column")}<span>Painel</span></a>` : ""}
+    <a href="#/conta" class="navlink" title="${esc(me.email)}">${icon("user")}<span>Conta</span></a>
+    <button class="ghost icon-btn" id="logout" title="Sair">${icon("log-out")}<span>Sair</span></button>`;
   document.getElementById("logout").onclick = async () => { await api("POST", "/api/auth/logout"); location.hash = "#/login"; };
   checkExtension();
   return me;
@@ -173,25 +193,25 @@ async function viewDecks() {
   const pending = decks.filter((d) => !d.snapshot_today).length;
   const rows = decks.map((d) => `
     <tr class="click" data-id="${d.id}">
-      <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${d.snapshot_today ? '<span class="tag ok">✓ hoje</span>' : fmtDay(d.last_day)}</span></td>
+      <td class="name">${esc(d.name || "Deck " + d.id)}<br><span class="muted small">${d.snapshot_today ? `<span class="tag ok">${icon("check", "sm")} hoje</span>` : fmtDay(d.last_day)}</span></td>
       <td class="num">${money(d.total_min)}</td>
       <td class="num">${change(d.total_min, d.prev_min)}</td>
     </tr>`).join("");
   $app.innerHTML = `
     <div class="card">
-      <h2>Acompanhar deck</h2>
+      <h2>${icon("plus")} Acompanhar deck</h2>
       <form id="add" class="row"><input type="text" id="deck" placeholder="URL ou ID do deck na LigaMagic" required><button>Adicionar</button></form>
       <p class="muted small">A extensão salva o preço de cada deck uma vez por dia.</p>
       <div id="addmsg"></div>
     </div>
     <div class="card">
-      <h2>Meus decks ${decks.length ? `<span class="pill">${pending ? plural(pending, "pendente hoje", "pendentes hoje") : "todos atualizados hoje"}</span>` : ""}</h2>
+      <h2>${icon("layers")} Meus decks ${decks.length ? `<span class="pill">${pending ? plural(pending, "pendente hoje", "pendentes hoje") : "todos atualizados hoje"}</span>` : ""}</h2>
       ${decks.length ? `<div class="scroll"><table>
         <thead><tr><th>Deck</th><th class="num">Mínimo</th><th class="num">Variação</th></tr></thead>
-        <tbody>${rows}</tbody></table></div>` : `<p class="muted">Nenhum deck ainda.</p>`}
+        <tbody>${rows}</tbody></table></div>` : `<div class="empty">${icon("layers", "xl")}<p class="muted">Nenhum deck ainda. Cole acima a URL de um deck da LigaMagic.</p></div>`}
     </div>
     <div class="card">
-      <h2>Passar decks para outro e-mail</h2>
+      <h2>${icon("users")} Passar decks para outro e-mail</h2>
       <form id="tr">
         <div class="row"><input type="email" id="temail" placeholder="outro@email.com" required></div>
         <p><label class="opt"><input type="radio" name="mode" value="copy" checked> Copiar (as duas contas acompanham)</label>
@@ -247,11 +267,11 @@ async function renderDeck(base, owner) {
     : `<p class="muted small">${empty}</p>`;
 
   $app.innerHTML = `
-    ${owner ? `<p><a href="#/">← Meus decks</a></p>` : `<p class="muted small">Visualização pública, somente leitura.</p>`}
+    ${owner ? `<p><a href="#/" class="back">${icon("arrow-left")} Meus decks</a></p>` : `<p class="muted small">${icon("eye")} Visualização pública, somente leitura.</p>`}
     <h1>${esc(title)}</h1>
     <p class="muted small">Último preço: ${fmtDay(cards.day)}${cards.prev_day ? ` · variação comparada a ${fmtDay(cards.prev_day)}` : ""}
-      · <a href="${esc(hist.url)}" target="_blank" rel="noopener">abrir na LigaMagic</a>
-      ${hist.points.length ? ` · <a href="${base}/export.csv" download>exportar CSV</a>` : ""}</p>
+      · <a href="${esc(hist.url)}" target="_blank" rel="noopener">abrir na LigaMagic ${icon("external-link", "sm")}</a>
+      ${hist.points.length ? ` · <a href="${base}/export.csv" download>exportar CSV ${icon("download", "sm")}</a>` : ""}</p>
     ${hist.points.length ? `
       <div class="card">
         <div class="row spread"><div><span class="muted small">Preço mínimo do deck</span>
@@ -260,34 +280,42 @@ async function renderDeck(base, owner) {
         <div class="chart"><canvas id="deckChart"></canvas></div>
       </div>
       ${cards.prev_day ? `<div class="grid2">
-        <div class="card"><h2>Maiores altas</h2>${moverList(ups, "Nenhuma carta subiu.")}</div>
-        <div class="card"><h2>Maiores baixas</h2>${moverList(downs, "Nenhuma carta caiu.")}</div>
+        <div class="card"><h2>${icon("trending-up", "up")} Maiores altas</h2>${moverList(ups, "Nenhuma carta subiu.")}</div>
+        <div class="card"><h2>${icon("trending-down", "down")} Maiores baixas</h2>${moverList(downs, "Nenhuma carta caiu.")}</div>
       </div>` : ""}
-      <div class="card" id="cardBox" style="display:none"><h2 id="cardTitle"></h2><div class="chart"><canvas id="cardChart"></canvas></div></div>
+      <div class="cards-layout" id="cardsLayout">
       <div class="card">
         <div class="row filters">
-          <input type="text" id="q" placeholder="Buscar carta" autocomplete="off">
+          <label class="search">${icon("search")}<input type="text" id="q" placeholder="Buscar carta" autocomplete="off"></label>
           <select id="sort" aria-label="Ordenar">
             <option value="price">Maior preço</option><option value="up">Maior alta</option><option value="down">Maior baixa</option><option value="name">Nome</option>
           </select>
         </div>
         <div id="tables"></div>
-        <p class="muted small">Toque em uma carta para ver o histórico. "—" significa sem oferta no dia.</p>
+        <p class="muted small">Toque em uma carta para ver o histórico ao lado. "—" significa sem oferta no dia.</p>
+      </div>
+      <div class="panel-backdrop" id="panelBackdrop"></div>
+      <aside class="card card-panel" id="cardPanel" aria-live="polite">
+        <div class="panel-head"><h2 id="cardTitle"></h2><button class="ghost icon-only" id="closePanel" title="Fechar">${icon("x")}</button></div>
+        <div id="cardSummary"></div>
+        <div class="chart"><canvas id="cardChart"></canvas></div>
+        <p class="small"><a id="cardLink" target="_blank" rel="noopener">ver a carta na LigaMagic ${icon("external-link", "sm")}</a></p>
+      </aside>
       </div>`
-    : `<div class="card"><p>Ainda não há preços salvos. Abra o deck na LigaMagic com a extensão instalada para salvar o primeiro.</p></div>`}
+    : `<div class="card empty">${icon("chart-line", "xl")}<p>Ainda não há preços salvos. Abra o deck na LigaMagic com a extensão instalada para salvar o primeiro.</p></div>`}
     ${owner ? `
       <div class="card">
-        <h2>Alerta por e-mail</h2>
+        <h2>${icon("bell")} Alerta por e-mail</h2>
         <div class="row"><label for="alert" class="small">Avisar quando o preço mínimo do deck variar</label>
           <select id="alert">${[["", "desligado"], ...[5, 10, 15, 20, 30, 50].map((n) => [n, `${n}% ou mais`])]
             .map(([v, l]) => `<option value="${v}" ${String(hist.alert_pct ?? "") === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select></div>
         <div id="alertmsg"></div>
       </div>
       <div class="card">
-        <h2>Link público</h2>
+        <h2>${icon("share-2")} Link público</h2>
         <div id="share"></div>
       </div>
-      <p><button class="danger" id="untrack">Parar de acompanhar</button></p>` : ""}`;
+      <p><button class="danger" id="untrack">${icon("trash-2")} Parar de acompanhar</button></p>` : ""}`;
 
   if (owner) wireOwner(hist);
   if (!hist.points.length) return;
@@ -299,20 +327,43 @@ async function renderDeck(base, owner) {
     deckChart = lineChart(document.getElementById("deckChart"), filterPeriod(hist.points, period));
     document.querySelectorAll("#period button").forEach((b) => b.classList.toggle("active", b.dataset.p === period));
   };
-  document.querySelectorAll("#period button").forEach((b) => (b.onclick = () => { period = b.dataset.p; draw(); }));
+  document.querySelectorAll("#period button").forEach((b) => (b.onclick = () => { period = b.dataset.p; draw(); if (current) drawCard(); }));
   draw();
 
-  // Histórico de uma carta
-  let cardChart = null;
+  // Histórico de uma carta, no painel à direita (no celular, desliza por cima da página)
+  let cardChart = null, current = null;
+  const layout = document.getElementById("cardsLayout");
+  const drawCard = () => {
+    const pts = filterPeriod(current.points, period);
+    const mins = pts.map((p) => p.min).filter((v) => v != null);
+    const lastP = current.points[current.points.length - 1] || {}, prevP = current.points[current.points.length - 2] || {};
+    document.getElementById("cardSummary").innerHTML = `
+      <div class="big">${money(lastP.min)} ${change(lastP.min, prevP.min)}</div>
+      <p class="muted small">${lastP.qty ? `${plural(lastP.qty, "cópia", "cópias")} · ` : ""}${mins.length
+        ? `menor ${money(Math.min(...mins))} · maior ${money(Math.max(...mins))} no período`
+        : "sem oferta no período"}</p>`;
+    if (cardChart) { cardChart.destroy(); charts = charts.filter((c) => c !== cardChart); }
+    cardChart = lineChart(document.getElementById("cardChart"), pts);
+  };
+  const closeCard = () => {
+    layout.classList.remove("open");
+    document.body.classList.remove("panel-open");
+    document.querySelectorAll("tr.selected").forEach((tr) => tr.classList.remove("selected"));
+    current = null;
+  };
   const showCard = async (key) => {
     const h = await api("GET", `${base}/card-history?key=${encodeURIComponent(key)}`);
-    const box = document.getElementById("cardBox");
-    box.style.display = "block";
+    current = { key, ...h };
     document.getElementById("cardTitle").textContent = h.name;
-    if (cardChart) { cardChart.destroy(); charts = charts.filter((c) => c !== cardChart); }
-    cardChart = lineChart(document.getElementById("cardChart"), filterPeriod(h.points, period));
-    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("cardLink").href = `https://www.ligamagic.com.br/?view=cards/card&card=${encodeURIComponent(h.name)}`;
+    document.querySelectorAll("#tables tr[data-key]").forEach((tr) => tr.classList.toggle("selected", tr.dataset.key === key));
+    layout.classList.add("open");
+    document.body.classList.toggle("panel-open", matchMedia("(max-width: 999px)").matches);
+    drawCard();
   };
+  document.getElementById("closePanel").onclick = closeCard;
+  document.getElementById("panelBackdrop").onclick = closeCard;
+  window.onkeydown = (e) => { if (e.key === "Escape" && current) closeCard(); };
   $app.querySelectorAll(".movers li").forEach((li) => (li.onclick = () => showCard(li.dataset.key)));
 
   // Tabela com busca e ordenação
@@ -339,7 +390,10 @@ async function renderDeck(base, owner) {
             <td class="num">${money(c.min)}</td>
             <td class="num">${change(c.min, c.prev_min)}</td>
           </tr>`).join("")}</tbody></table></div>`).join("") : `<p class="muted">Nenhuma carta encontrada.</p>`;
-    document.querySelectorAll("#tables tr[data-key]").forEach((tr) => (tr.onclick = () => showCard(tr.dataset.key)));
+    document.querySelectorAll("#tables tr[data-key]").forEach((tr) => {
+      tr.classList.toggle("selected", tr.dataset.key === current?.key);
+      tr.onclick = () => showCard(tr.dataset.key);
+    });
   };
   document.getElementById("q").oninput = renderTables;
   document.getElementById("sort").onchange = renderTables;
@@ -361,15 +415,15 @@ function wireOwner(hist) {
     const box = document.getElementById("share");
     box.innerHTML = url ? `
       <p class="muted small">Qualquer pessoa com o link vê o histórico deste deck, sem precisar entrar. Seu e-mail não aparece.</p>
-      <div class="row"><input type="text" id="shareUrl" value="${esc(url)}" readonly><button id="copy">Copiar</button></div>
+      <div class="row"><input type="text" id="shareUrl" value="${esc(url)}" readonly><button id="copy">${icon("copy")} Copiar</button></div>
       <p><button class="ghost" id="unshare">Desativar link</button></p>` : `
       <p class="muted small">Crie um link somente leitura para mostrar o histórico deste deck para outras pessoas.</p>
-      <button id="mkshare">Criar link público</button>`;
+      <button id="mkshare">${icon("link")} Criar link público</button>`;
     if (url) {
       document.getElementById("copy").onclick = async (e) => {
         const input = document.getElementById("shareUrl");
         try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand("copy"); }
-        e.target.textContent = "Copiado";
+        e.currentTarget.innerHTML = `${icon("check")} Copiado`;
       };
       document.getElementById("unshare").onclick = async () => {
         if (!confirm("Desativar o link? Quem tiver o link antigo não vai conseguir abrir.")) return;
@@ -402,19 +456,19 @@ async function viewPublic(token) {
 async function viewAccount() {
   const me = await header();
   $app.innerHTML = `
-    <p><a href="#/">← Meus decks</a></p>
+    <p><a href="#/" class="back">${icon("arrow-left")} Meus decks</a></p>
     <h1>Conta</h1>
     <div class="card">
-      <h2>E-mail</h2>
+      <h2>${icon("mail")} E-mail</h2>
       <p>${esc(me.email)}</p>
     </div>
     <div class="card">
-      <h2>Seus dados</h2>
+      <h2>${icon("shield-check")} Seus dados</h2>
       <p class="muted small">Baixe tudo o que guardamos sobre a sua conta: e-mail, decks acompanhados, alertas, links públicos e sessões. O histórico de preços é dos decks e não fica ligado a você.</p>
-      <a href="/api/me/export" download><button class="ghost">Baixar meus dados (JSON)</button></a>
+      <a href="/api/me/export" download><button class="ghost">${icon("download")} Baixar meus dados (JSON)</button></a>
     </div>
     <div class="card">
-      <h2>Excluir conta</h2>
+      <h2>${icon("trash-2")} Excluir conta</h2>
       <p class="muted small">Apaga a conta, os decks acompanhados, os alertas, os links públicos e todas as sessões, inclusive a da extensão. Não dá para desfazer.</p>
       <form id="del">
         <label for="confirm" class="small">Digite <b>${esc(me.email)}</b> para confirmar</label>

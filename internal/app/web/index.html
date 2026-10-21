@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2f6fde">
 <title>MTG Tracker</title>
+<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -14,8 +15,8 @@
 </head>
 <body>
 <header>
-  <a href="#/" class="brand">MTG Tracker</a>
-  <nav><a href="#/extensao" class="small">Extensão</a> <span id="who"></span></nav>
+  <a href="#/" class="brand"><svg class="i logo" aria-hidden="true"><use href="/icons.svg#chart-line"/></svg>MTG Tracker</a>
+  <nav><a href="#/extensao" class="navlink ext-link"><svg class="i" aria-hidden="true"><use href="/icons.svg#puzzle"/></svg><span>Extensão</span></a> <span id="who"></span></nav>
 </header>
 <div id="banner"></div>
 <main id="app"><p class="muted">Carregando…</p></main>

@@ -146,3 +146,8 @@ Os preços vêm no HTML da página do deck, não de uma requisição JSON:
 - cartas: `#dk-val-1-<id> > .pdeck-block .deck-line`, com `.deck-qty`, `.deck-card a[data-lc-id]` e `.pdeck_preco_{2,3,4}_<id>`.
 
 Se a LigaMagic mudar o layout, o ajuste é em `extension/content.js`, na função `parseDeck`.
+
+## Créditos
+
+- Fonte [Inter](https://rsms.me/inter/) (SIL Open Font License), em `internal/app/web/fonts/`.
+- Ícones [Lucide](https://lucide.dev) (ISC), em `internal/app/web/icons.svg`. Para adicionar um ícone, copie o `<symbol>` dele de `lucide-static` para o sprite e use `icon("nome")` no `app.js`.

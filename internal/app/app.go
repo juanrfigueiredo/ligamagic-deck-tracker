@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -17,6 +18,9 @@ import (
 
 //go:embed all:web
 var webFS embed.FS
+
+// O Go só conhece .woff2 pelo mime.types do sistema, que o servidor pode não ter.
+func init() { mime.AddExtensionType(".woff2", "font/woff2") }
 
 type App struct {
 	db      *sql.DB
