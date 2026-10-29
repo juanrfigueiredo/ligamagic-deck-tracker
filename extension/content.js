@@ -15,6 +15,12 @@
     return Number.isFinite(v) && v > 0 ? v : null;
   };
 
+  // Custo de mana convertido da linha. null quando não dá para ler.
+  // TODO: implementar quando soubermos como a LigaMagic marca os símbolos de mana na linha.
+  function cmcOf(line) {
+    return null;
+  }
+
   function parseDeck() {
     const root = document.getElementById(`dk-val-1-${deckId}`);
     const blocks = root ? root.querySelectorAll(":scope > div.pdeck-block") : document.querySelectorAll("div.pdeck-block");
@@ -28,12 +34,14 @@
     const visible = [...blocks].filter((b) => !b.parentElement.classList.contains("pdeck-block-ax")).slice(0, 2);
     for (const block of visible) {
       let board = "main";
+      let group = null; // título do grupo na visualização Padrão: "Criaturas", "Mágicas", "Terrenos"...
       for (const line of block.querySelectorAll(".deck-line")) {
         const type = line.querySelector(".deck-type");
         if (type) {
           const t = type.textContent.trim().toLowerCase();
-          if (t.startsWith("maybeboard")) board = "maybe";
-          else if (t.startsWith("sideboard")) board = "side";
+          if (t.startsWith("maybeboard")) { board = "maybe"; group = null; }
+          else if (t.startsWith("sideboard")) { board = "side"; group = null; }
+          else group = type.textContent.replace(/\(\s*\d+\s*\)/, "").trim() || null;
           continue;
         }
         const qtyEl = line.querySelector(".deck-qty");
@@ -42,7 +50,8 @@
         const name = (link.dataset.lcName || link.textContent).trim();
         const key = link.dataset.lcId ? String(link.dataset.lcId) : "n:" + name;
         const price = (i) => cents(line.querySelector(`.pdeck_preco_${i}_${deckId}`)?.textContent);
-        cards.push({ key, name, board, qty: parseInt(qtyEl.textContent, 10) || 1, min: price(2), avg: price(3), max: price(4) });
+        cards.push({ key, name, board, qty: parseInt(qtyEl.textContent, 10) || 1, min: price(2), avg: price(3), max: price(4),
+                     type: board === "main" ? group : null, cmc: cmcOf(line) });
       }
     }
     const name = document.title.split(" - Deck Magic")[0].trim();

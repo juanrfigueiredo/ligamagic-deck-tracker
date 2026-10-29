@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS user_decks (
 );
 CREATE INDEX IF NOT EXISTS idx_user_decks_deck ON user_decks (deck_id);
 
--- card_key = data-lc-id da LigaMagic (ou "n:<nome>" se faltar)
+-- card_key = data-lc-id da LigaMagic (ou "n:<nome>" se faltar).
+-- type e cmc (tipo e custo de mana) são adicionados em Migrate.
 CREATE TABLE IF NOT EXISTS cards (
   card_key TEXT PRIMARY KEY,
   name     TEXT NOT NULL

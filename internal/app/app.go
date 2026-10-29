@@ -52,6 +52,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/me", a.auth(a.handleDeleteAccount))
 	mux.HandleFunc("GET /api/admin/stats", a.auth(a.handleAdminStats))
 
+	mux.HandleFunc("GET /api/compare", a.auth(a.handleCompare))
 	mux.HandleFunc("GET /api/decks", a.auth(a.handleListDecks))
 	mux.HandleFunc("POST /api/decks", a.auth(a.handleAddDeck))
 	mux.HandleFunc("DELETE /api/decks/{id}", a.auth(a.handleRemoveDeck))

@@ -205,7 +205,8 @@ async function viewDecks() {
       <div id="addmsg"></div>
     </div>
     <div class="card">
-      <h2>${icon("layers")} Meus decks ${decks.length ? `<span class="pill">${pending ? plural(pending, "pendente hoje", "pendentes hoje") : "todos atualizados hoje"}</span>` : ""}</h2>
+      <div class="row spread"><h2>${icon("layers")} Meus decks ${decks.length ? `<span class="pill">${pending ? plural(pending, "pendente hoje", "pendentes hoje") : "todos atualizados hoje"}</span>` : ""}</h2>
+        ${decks.length >= 2 ? `<a href="#/comparar"><button class="ghost">${icon("columns-2")} Comparar decks</button></a>` : ""}</div>
       ${decks.length ? `<div class="scroll"><table>
         <thead><tr><th>Deck</th><th class="num">Mínimo</th><th class="num">Variação</th></tr></thead>
         <tbody>${rows}</tbody></table></div>` : `<div class="empty">${icon("layers", "xl")}<p class="muted">Nenhum deck ainda. Cole acima a URL de um deck da LigaMagic.</p></div>`}
@@ -527,6 +528,110 @@ async function viewAdmin() {
   barChart(document.getElementById("c2"), s.snapshots_per_day, "Snapshots");
 }
 
+
+// ---------- comparador ----------
+
+const MAX_COMPARE = 4;
+// Ordem dos grupos como na LigaMagic. Títulos desconhecidos vão para o fim, antes de "Sem tipo".
+const TYPE_ORDER = ["Comandante", "Criaturas", "Planeswalkers", "Mágicas", "Instantâneas", "Feitiços", "Artefatos", "Encantamentos", "Batalhas", "Terrenos"];
+const typeRank = (t) => (t == null ? 99 : TYPE_ORDER.indexOf(t) >= 0 ? TYPE_ORDER.indexOf(t) : 50);
+
+async function viewCompare(param) {
+  await header();
+  document.title = "Comparar decks · MTG Tracker";
+  const decks = await api("GET", "/api/decks");
+  const chosen = (param || "").split(",").filter((x) => /^\d+$/.test(x)).slice(0, MAX_COMPARE);
+  const picker = `
+    <div class="card">
+      <p><a href="#/" class="back">${icon("arrow-left")} Meus decks</a></p>
+      <h1>${icon("columns-2")} Comparar decks</h1>
+      <p class="muted small">Escolha de 2 a ${MAX_COMPARE} decks. Cartas iguais ficam na mesma linha, agrupadas por tipo e ordenadas por custo de mana. Compara só o deck principal.</p>
+      <form id="pick">
+        <div class="pick">${decks.map((d) => `
+          <label class="opt"><input type="checkbox" value="${d.id}" ${chosen.includes(String(d.id)) ? "checked" : ""}> ${esc(d.name || "Deck " + d.id)}</label>`).join("")}</div>
+        <button id="go">${icon("columns-2")} Comparar</button> <span id="pickmsg" class="muted small"></span>
+      </form>
+    </div>
+    <div id="cmp"></div>`;
+  $app.innerHTML = picker;
+
+  const form = document.getElementById("pick");
+  const boxes = [...form.querySelectorAll("input[type=checkbox]")];
+  const sync = () => {
+    const n = boxes.filter((b) => b.checked).length;
+    boxes.forEach((b) => (b.disabled = !b.checked && n >= MAX_COMPARE));
+    document.getElementById("go").disabled = n < 2;
+    document.getElementById("pickmsg").textContent = n >= MAX_COMPARE ? `Máximo de ${MAX_COMPARE} decks.` : `${n} selecionado(s)`;
+  };
+  boxes.forEach((b) => (b.onchange = sync));
+  sync();
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    location.hash = "#/comparar/" + boxes.filter((b) => b.checked).map((b) => b.value).join(",");
+  };
+  if (chosen.length < 2) return;
+
+  const data = await api("GET", `/api/compare?decks=${chosen.join(",")}`);
+  renderCompare(data);
+}
+
+function renderCompare({ decks, cards }) {
+  const $c = document.getElementById("cmp");
+  const n = decks.length;
+  const same = (c) => c.qty.every((q) => q === c.qty[0]);
+  cards.sort((a, b) => typeRank(a.type) - typeRank(b.type) || (a.type || "").localeCompare(b.type || "")
+    || (a.cmc ?? 99) - (b.cmc ?? 99) || a.name.localeCompare(b.name, "pt-BR"));
+
+  const common = cards.filter(same).length;
+  const only = decks.map((_, i) => cards.filter((c) => c.qty[i] > 0 && c.qty.every((q, j) => j === i || q === 0)).length);
+  const total = decks.map((_, i) => cards.reduce((s, c) => s + c.qty[i], 0));
+  const noInfo = cards.filter((c) => c.type == null || c.cmc == null).length;
+
+  const head = decks.map((d) => `<th class="num deck-col" title="${esc(d.name)}"><a href="#/deck/${d.id}">${esc(d.name || "Deck " + d.id)}</a>
+    <div class="muted small">${d.day ? fmtDay(d.day) : "sem dados"}</div></th>`).join("");
+
+  let mode = "all";
+  const draw = () => {
+    let lastType;
+    const rows = [];
+    const shown = cards.filter((c) => mode === "all" || (mode === "diff") !== same(c));
+    for (const c of shown) {
+      const eq = same(c);
+      const t = c.type ?? "Sem tipo";
+      if (t !== lastType) {
+        const count = shown.filter((x) => (x.type ?? "Sem tipo") === t).length;
+        rows.push(`<tr class="group"><td colspan="${n + 2}">${esc(t)} <span class="muted">(${count})</span></td></tr>`);
+        lastType = t;
+      }
+      const cells = c.qty.map((q) => `<td class="num ${q ? "" : "miss"}">${q || "—"}</td>`).join("");
+      rows.push(`<tr class="${eq ? "same" : "diff"}"><td class="num cmc">${c.cmc ?? "?"}</td><td class="name">${esc(c.name)}</td>${cells}</tr>`);
+    }
+    document.getElementById("cmp-body").innerHTML = rows.join("") ||
+      `<tr><td colspan="${n + 2}" class="muted">Nada para mostrar.</td></tr>`;
+  };
+
+  $c.innerHTML = `
+    <div class="stats cmp-stats" style="grid-template-columns:repeat(${n + 1}, 1fr)">
+      <div class="stat"><span class="muted small">Iguais em todos</span><b>${common}</b></div>
+      ${decks.map((d, i) => `<div class="stat"><span class="muted small" title="${esc(d.name)}">${esc(d.name || "Deck " + d.id)}</span>
+        <b>${plural(only[i], "exclusiva", "exclusivas")}</b><span class="muted small">${total[i]} cartas</span></div>`).join("")}
+    </div>
+    ${noInfo ? `<div class="card small">${icon("circle-alert")} ${plural(noInfo, "carta está", "cartas estão")} sem tipo ou custo de mana. Abra esses decks na LigaMagic com a extensão atualizada para completar.</div>` : ""}
+    <div class="card">
+      <div class="row spread"><h2>${icon("list")} Cartas</h2>
+        <div class="seg" id="mode"><button class="ghost active" data-m="all">Todas</button><button class="ghost" data-m="diff">Diferenças</button><button class="ghost" data-m="same">Iguais</button></div></div>
+      <div class="scroll"><table class="compare">
+        <thead><tr><th class="num">CMC</th><th>Carta</th>${head}</tr></thead>
+        <tbody id="cmp-body"></tbody></table></div>
+    </div>`;
+  document.querySelectorAll("#mode button").forEach((b) => (b.onclick = () => {
+    mode = b.dataset.m;
+    document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("active", x === b));
+    draw();
+  }));
+  draw();
+}
+
 async function route() {
   clearCharts();
   document.title = "MTG Tracker";
@@ -538,6 +643,8 @@ async function route() {
     if (h === "#/admin") return await viewAdmin();
     let m = h.match(/^#\/p\/([\w-]+)$/);
     if (m) return await viewPublic(m[1]);
+    m = h.match(/^#\/comparar(?:\/([\d,]+))?$/);
+    if (m) return await viewCompare(m[1]);
     m = h.match(/^#\/deck\/(\d+)$/);
     if (m) return await viewDeck(m[1]);
     return await viewDecks();

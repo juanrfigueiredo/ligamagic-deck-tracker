@@ -127,6 +127,19 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 5px; border: 1px 
 @keyframes slide-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .card-panel, .panel-backdrop { transition: none; animation: none; } }
 
+/* Comparador */
+.pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; margin-bottom: 12px; }
+.pick label.opt { min-width: 0; } .pick input { flex: none; width: 18px; height: 18px; }
+.cmp-stats .stat span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.compare td.cmc { width: 48px; color: var(--muted); }
+table.compare th.deck-col { max-width: 160px; white-space: normal; text-transform: none; letter-spacing: 0; font-size: 13px; }
+table.compare th.deck-col a { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+table.compare tr.group td { background: var(--bg); font-weight: 650; font-size: 13px; padding: 7px 8px; }
+table.compare tr.same td { color: var(--muted); }
+table.compare tr.same td.name { font-weight: 400; }
+table.compare tr.diff td:not(.cmc):not(.name):not(.miss) { color: var(--text); font-weight: 650; background: var(--brand-soft); }
+table.compare td.miss { color: var(--line); }
+
 @media (max-width: 640px) {
   main { padding: 12px; }
   header { padding: 10px 12px; }
@@ -141,6 +154,8 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 5px; border: 1px 
   .grid2 { grid-template-columns: 1fr; gap: 0; }
   .stats { gap: 8px; }
   .stats4 { grid-template-columns: 1fr 1fr; }
+  .cmp-stats { grid-template-columns: 1fr 1fr !important; }
+  table.compare th.deck-col { max-width: 90px; font-size: 12px; }
   .stat { padding: 10px 8px; }
   .stat b { font-size: 17px; }
   .chart { height: 220px; }

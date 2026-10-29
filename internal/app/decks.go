@@ -178,6 +178,15 @@ type snapCard struct {
 	Min   *int64 `json:"min"`
 	Avg   *int64 `json:"avg"`
 	Max   *int64 `json:"max"`
+	// Tipo (título do grupo na LigaMagic, ex.: "Criaturas") e custo de mana. Opcionais: versões antigas da extensão não mandam.
+	Type *string `json:"type"`
+	CMC  *int64  `json:"cmc"`
+}
+
+type cardInfo struct {
+	name string
+	typ  *string
+	cmc  *int64
 }
 
 type snapIn struct {
@@ -250,7 +259,7 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 	type k struct{ board, key string }
 	merged := map[k]*snapCard{}
 	order := []k{}
-	names := map[string]string{}
+	names := map[string]cardInfo{}
 	for _, c := range in.Cards {
 		c.Key, c.Name = strings.TrimSpace(c.Key), trimName(c.Name)
 		if c.Key == "" || len(c.Key) > 120 || c.Name == "" {
@@ -265,7 +274,27 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 			writeErr(w, http.StatusUnprocessableEntity, "Valores inválidos na carta "+c.Name)
 			return
 		}
-		names[c.Key] = c.Name
+		if c.Type != nil {
+			t := trimName(*c.Type)
+			if r := []rune(t); len(r) > 40 {
+				t = string(r[:40])
+			}
+			if c.Type = &t; t == "" {
+				c.Type = nil
+			}
+		}
+		if c.CMC != nil && (*c.CMC < 0 || *c.CMC > 20) {
+			c.CMC = nil
+		}
+		info := names[c.Key]
+		info.name = c.Name
+		if c.Type != nil {
+			info.typ = c.Type
+		}
+		if c.CMC != nil {
+			info.cmc = c.CMC
+		}
+		names[c.Key] = info
 		kk := k{c.Board, c.Key}
 		if m, ok := merged[kk]; ok {
 			m.Qty += c.Qty
@@ -314,12 +343,15 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	for i := 0; i < len(keys); i += 200 {
 		chunk := keys[i:min(i+200, len(keys))]
-		args := make([]any, 0, len(chunk)*2)
+		args := make([]any, 0, len(chunk)*4)
 		for _, key := range chunk {
-			args = append(args, key, names[key])
+			c := names[key]
+			args = append(args, key, c.name, c.typ, c.cmc)
 		}
-		q := `INSERT INTO cards (card_key, name) VALUES ` + placeholders(len(chunk), 2) +
-			` ON CONFLICT (card_key) DO UPDATE SET name = excluded.name`
+		// Tipo e custo só são sobrescritos quando vierem preenchidos.
+		q := `INSERT INTO cards (card_key, name, type, cmc) VALUES ` + placeholders(len(chunk), 4) +
+			` ON CONFLICT (card_key) DO UPDATE SET name = excluded.name,
+			  type = COALESCE(excluded.type, cards.type), cmc = COALESCE(excluded.cmc, cards.cmc)`
 		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 			serverErr(w, err)
 			return
