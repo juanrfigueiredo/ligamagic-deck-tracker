@@ -52,7 +52,6 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	// Colunas novas em tabelas que já existem. SQLite não tem ADD COLUMN IF NOT EXISTS.
 	for _, stmt := range []string{
 		`ALTER TABLE cards ADD COLUMN type TEXT`,
-		`ALTER TABLE cards ADD COLUMN cmc INTEGER`,
 	} {
 		if _, err := db.ExecContext(ctx, stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %w\n%s", err, stmt)

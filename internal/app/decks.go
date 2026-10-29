@@ -178,15 +178,13 @@ type snapCard struct {
 	Min   *int64 `json:"min"`
 	Avg   *int64 `json:"avg"`
 	Max   *int64 `json:"max"`
-	// Tipo (título do grupo na LigaMagic, ex.: "Criaturas") e custo de mana. Opcionais: versões antigas da extensão não mandam.
+	// Tipo (título do grupo na LigaMagic, ex.: "Criaturas"). Opcional: versões antigas da extensão não mandam.
 	Type *string `json:"type"`
-	CMC  *int64  `json:"cmc"`
 }
 
 type cardInfo struct {
 	name string
 	typ  *string
-	cmc  *int64
 }
 
 type snapIn struct {
@@ -283,16 +281,10 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 				c.Type = nil
 			}
 		}
-		if c.CMC != nil && (*c.CMC < 0 || *c.CMC > 20) {
-			c.CMC = nil
-		}
 		info := names[c.Key]
 		info.name = c.Name
 		if c.Type != nil {
 			info.typ = c.Type
-		}
-		if c.CMC != nil {
-			info.cmc = c.CMC
 		}
 		names[c.Key] = info
 		kk := k{c.Board, c.Key}
@@ -343,15 +335,14 @@ func (a *App) handleSnapshot(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	for i := 0; i < len(keys); i += 200 {
 		chunk := keys[i:min(i+200, len(keys))]
-		args := make([]any, 0, len(chunk)*4)
+		args := make([]any, 0, len(chunk)*3)
 		for _, key := range chunk {
 			c := names[key]
-			args = append(args, key, c.name, c.typ, c.cmc)
+			args = append(args, key, c.name, c.typ)
 		}
-		// Tipo e custo só são sobrescritos quando vierem preenchidos.
-		q := `INSERT INTO cards (card_key, name, type, cmc) VALUES ` + placeholders(len(chunk), 4) +
-			` ON CONFLICT (card_key) DO UPDATE SET name = excluded.name,
-			  type = COALESCE(excluded.type, cards.type), cmc = COALESCE(excluded.cmc, cards.cmc)`
+		// O tipo só é sobrescrito quando vier preenchido.
+		q := `INSERT INTO cards (card_key, name, type) VALUES ` + placeholders(len(chunk), 3) +
+			` ON CONFLICT (card_key) DO UPDATE SET name = excluded.name, type = COALESCE(excluded.type, cards.type)`
 		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 			serverErr(w, err)
 			return

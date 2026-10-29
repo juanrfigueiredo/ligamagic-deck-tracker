@@ -19,16 +19,16 @@ func TestCompare(t *testing.T) {
 		}
 	}
 	post("1", []snapCard{
-		{Key: "a", Name: "Raio", Board: "main", Qty: 1, Type: s("Mágicas"), CMC: i64(1)},
-		{Key: "b", Name: "Fúria", Board: "main", Qty: 1, Type: s("Criaturas"), CMC: i64(5)},
-		{Key: "m", Name: "Montanha", Board: "main", Qty: 27, Type: s("Terrenos"), CMC: i64(0)},
+		{Key: "a", Name: "Raio", Board: "main", Qty: 1, Type: s("Mágicas")},
+		{Key: "b", Name: "Fúria", Board: "main", Qty: 1, Type: s("Criaturas")},
+		{Key: "m", Name: "Montanha", Board: "main", Qty: 27, Type: s("Terrenos")},
 		{Key: "x", Name: "Choque", Board: "maybe", Qty: 1},
 	})
-	// Versão antiga da extensão (sem tipo/custo) não apaga o que já foi salvo.
+	// Versão antiga da extensão (sem tipo) não apaga o que já foi salvo.
 	post("2", []snapCard{
 		{Key: "a", Name: "Raio", Board: "main", Qty: 1},
 		{Key: "m", Name: "Montanha", Board: "main", Qty: 25},
-		{Key: "c", Name: "Sear", Board: "main", Qty: 1, Type: s("Mágicas"), CMC: i64(2)},
+		{Key: "c", Name: "Sear", Board: "main", Qty: 1, Type: s("Mágicas")},
 	})
 
 	if st, _ := do(t, srv, "GET", "/api/compare?decks=1", tok, nil); st != 400 {
@@ -59,7 +59,7 @@ func TestCompare(t *testing.T) {
 	if mt := q("m"); mt[0].(float64) != 27 || mt[1].(float64) != 25 {
 		t.Fatalf("Montanha: %v", mt)
 	}
-	if rows["a"]["type"] != "Mágicas" || rows["a"]["cmc"].(float64) != 1 {
-		t.Fatalf("tipo/custo perdidos: %v", rows["a"])
+	if rows["a"]["type"] != "Mágicas" {
+		t.Fatalf("tipo perdido: %v", rows["a"])
 	}
 }

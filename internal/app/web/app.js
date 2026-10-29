@@ -545,7 +545,7 @@ async function viewCompare(param) {
     <div class="card">
       <p><a href="#/" class="back">${icon("arrow-left")} Meus decks</a></p>
       <h1>${icon("columns-2")} Comparar decks</h1>
-      <p class="muted small">Escolha de 2 a ${MAX_COMPARE} decks. Cartas iguais ficam na mesma linha, agrupadas por tipo e ordenadas por custo de mana. Compara só o deck principal.</p>
+      <p class="muted small">Escolha de 2 a ${MAX_COMPARE} decks. Cartas iguais ficam na mesma linha. Compara só o deck principal.</p>
       <form id="pick">
         <div class="pick">${decks.map((d) => `
           <label class="opt"><input type="checkbox" value="${d.id}" ${chosen.includes(String(d.id)) ? "checked" : ""}> ${esc(d.name || "Deck " + d.id)}</label>`).join("")}</div>
@@ -575,53 +575,79 @@ async function viewCompare(param) {
   renderCompare(data);
 }
 
+// Preferências do comparador (só conveniência; se o navegador bloquear, usa o padrão).
+const prefGet = (k, def) => { try { return localStorage.getItem(k) || def; } catch { return def; } };
+const prefSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
 function renderCompare({ decks, cards }) {
   const $c = document.getElementById("cmp");
   const n = decks.length;
   const same = (c) => c.qty.every((q) => q === c.qty[0]);
-  cards.sort((a, b) => typeRank(a.type) - typeRank(b.type) || (a.type || "").localeCompare(b.type || "")
-    || (a.cmc ?? 99) - (b.cmc ?? 99) || a.name.localeCompare(b.name, "pt-BR"));
+  const inDecks = (c) => c.qty.filter((q) => q > 0).length;
+  const byName = (a, b) => a.name.localeCompare(b.name, "pt-BR");
 
   const common = cards.filter(same).length;
   const only = decks.map((_, i) => cards.filter((c) => c.qty[i] > 0 && c.qty.every((q, j) => j === i || q === 0)).length);
   const total = decks.map((_, i) => cards.reduce((s, c) => s + c.qty[i], 0));
-  const noInfo = cards.filter((c) => c.type == null || c.cmc == null).length;
+  const noType = cards.filter((c) => c.type == null).length;
 
   const head = decks.map((d) => `<th class="num deck-col" title="${esc(d.name)}"><a href="#/deck/${d.id}">${esc(d.name || "Deck " + d.id)}</a>
     <div class="muted small">${d.day ? fmtDay(d.day) : "sem dados"}</div></th>`).join("");
 
-  let mode = "all";
-  const draw = () => {
-    let lastType;
-    const rows = [];
-    const shown = cards.filter((c) => mode === "all" || (mode === "diff") !== same(c));
-    for (const c of shown) {
-      const eq = same(c);
-      const t = c.type ?? "Sem tipo";
-      if (t !== lastType) {
-        const count = shown.filter((x) => (x.type ?? "Sem tipo") === t).length;
-        rows.push(`<tr class="group"><td colspan="${n + 2}">${esc(t)} <span class="muted">(${count})</span></td></tr>`);
-        lastType = t;
-      }
-      const cells = c.qty.map((q) => `<td class="num ${q ? "" : "miss"}">${q || "—"}</td>`).join("");
-      rows.push(`<tr class="${eq ? "same" : "diff"}"><td class="num cmc">${c.cmc ?? "?"}</td><td class="name">${esc(c.name)}</td>${cells}</tr>`);
-    }
-    document.getElementById("cmp-body").innerHTML = rows.join("") ||
-      `<tr><td colspan="${n + 2}" class="muted">Nada para mostrar.</td></tr>`;
+  // Agrupamento: [rótulo do grupo, ordem do grupo] para cada carta.
+  const GROUPS = {
+    type: (c) => [c.type ?? "Sem tipo", typeRank(c.type)],
+    presence: (c) => (same(c) ? ["Iguais em todos", 0] : inDecks(c) === n ? ["Em todos, quantidade diferente", 1]
+      : inDecks(c) > 1 ? [`Em ${inDecks(c)} de ${n} decks`, 2 + n - inDecks(c)] : ["Só em um deck", 99]),
+    none: () => ["", 0],
+  };
+  const SORTS = {
+    name: byName,
+    decks: (a, b) => inDecks(b) - inDecks(a) || byName(a, b),
+    copies: (a, b) => b.qty.reduce((x, y) => x + y, 0) - a.qty.reduce((x, y) => x + y, 0) || byName(a, b),
   };
 
+  let mode = "all";
+  let group = prefGet("cmp-group", "type"), sort = prefGet("cmp-sort", "name");
+  if (!GROUPS[group]) group = "type";
+  if (!SORTS[sort]) sort = "name";
+
+  const draw = () => {
+    const shown = cards.filter((c) => mode === "all" || (mode === "diff") !== same(c))
+      .map((c) => ({ c, g: GROUPS[group](c) }))
+      .sort((a, b) => a.g[1] - b.g[1] || a.g[0].localeCompare(b.g[0]) || SORTS[sort](a.c, b.c));
+    const rows = [];
+    let last;
+    for (const { c, g } of shown) {
+      if (g[0] && g[0] !== last) {
+        const count = shown.filter((x) => x.g[0] === g[0]).length;
+        rows.push(`<tr class="group"><td colspan="${n + 1}">${esc(g[0])} <span class="muted">(${count})</span></td></tr>`);
+        last = g[0];
+      }
+      const cells = c.qty.map((q) => `<td class="num ${q ? "" : "miss"}">${q || "—"}</td>`).join("");
+      rows.push(`<tr class="${same(c) ? "same" : "diff"}"><td class="name">${esc(c.name)}</td>${cells}</tr>`);
+    }
+    document.getElementById("cmp-body").innerHTML = rows.join("") ||
+      `<tr><td colspan="${n + 1}" class="muted">Nada para mostrar.</td></tr>`;
+  };
+
+  const opt = (cur, list) => list.map(([v, l]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`).join("");
   $c.innerHTML = `
     <div class="stats cmp-stats" style="grid-template-columns:repeat(${n + 1}, 1fr)">
       <div class="stat"><span class="muted small">Iguais em todos</span><b>${common}</b></div>
       ${decks.map((d, i) => `<div class="stat"><span class="muted small" title="${esc(d.name)}">${esc(d.name || "Deck " + d.id)}</span>
         <b>${plural(only[i], "exclusiva", "exclusivas")}</b><span class="muted small">${total[i]} cartas</span></div>`).join("")}
     </div>
-    ${noInfo ? `<div class="card small">${icon("circle-alert")} ${plural(noInfo, "carta está", "cartas estão")} sem tipo ou custo de mana. Abra esses decks na LigaMagic com a extensão atualizada para completar.</div>` : ""}
+    ${noType && group === "type" ? `<div class="card small">${icon("circle-alert")} ${plural(noType, "carta está", "cartas estão")} sem tipo. Abra esses decks na LigaMagic com a extensão atualizada (0.4.0) para completar.</div>` : ""}
     <div class="card">
       <div class="row spread"><h2>${icon("list")} Cartas</h2>
         <div class="seg" id="mode"><button class="ghost active" data-m="all">Todas</button><button class="ghost" data-m="diff">Diferenças</button><button class="ghost" data-m="same">Iguais</button></div></div>
+      <div class="row cmp-opts">
+        <label>Agrupar <select id="group">${opt(group, [["type", "Por tipo"], ["presence", "Por presença nos decks"], ["none", "Sem agrupar"]])}</select></label>
+        <label>Ordenar <select id="sort">${opt(sort, [["name", "Alfabética"], ["decks", "Em mais decks primeiro"], ["copies", "Mais cópias primeiro"]])}</select></label>
+      </div>
       <div class="scroll"><table class="compare">
-        <thead><tr><th class="num">CMC</th><th>Carta</th>${head}</tr></thead>
+        <thead><tr><th>Carta</th>${head}</tr></thead>
         <tbody id="cmp-body"></tbody></table></div>
     </div>`;
   document.querySelectorAll("#mode button").forEach((b) => (b.onclick = () => {
@@ -629,6 +655,12 @@ function renderCompare({ decks, cards }) {
     document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("active", x === b));
     draw();
   }));
+  document.getElementById("group").onchange = (e) => {
+    group = e.target.value; prefSet("cmp-group", group);
+    if (group !== "type") document.querySelector("#cmp > .card.small")?.remove();
+    draw();
+  };
+  document.getElementById("sort").onchange = (e) => { sort = e.target.value; prefSet("cmp-sort", sort); draw(); };
   draw();
 }
 

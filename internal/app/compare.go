@@ -20,7 +20,6 @@ type compareRow struct {
 	Key  string  `json:"key"`
 	Name string  `json:"name"`
 	Type *string `json:"type"`
-	CMC  *int64  `json:"cmc"`
 	// Qty[i] = quantidade no deck i (0 = não tem). Mesma ordem de "decks".
 	Qty []int `json:"qty"`
 }
@@ -70,7 +69,7 @@ func (a *App) handleCompare(w http.ResponseWriter, r *http.Request, u user) {
 			continue
 		}
 		rs, err := a.db.QueryContext(ctx, `
-			SELECT sc.card_key, c.name, c.type, c.cmc, sc.qty
+			SELECT sc.card_key, c.name, c.type, sc.qty
 			FROM snapshot_cards sc JOIN cards c ON c.card_key = sc.card_key
 			WHERE sc.snapshot_id = ? AND sc.board = 'main'`, snapID.Int64)
 		if err != nil {
@@ -80,16 +79,15 @@ func (a *App) handleCompare(w http.ResponseWriter, r *http.Request, u user) {
 		for rs.Next() {
 			var key, name string
 			var typ sql.NullString
-			var cmc sql.NullInt64
 			var qty int
-			if err := rs.Scan(&key, &name, &typ, &cmc, &qty); err != nil {
+			if err := rs.Scan(&key, &name, &typ, &qty); err != nil {
 				rs.Close()
 				serverErr(w, err)
 				return
 			}
 			row := byKey[key]
 			if row == nil {
-				row = &compareRow{Key: key, Name: name, CMC: nullPtr(cmc), Qty: make([]int, len(ids))}
+				row = &compareRow{Key: key, Name: name, Qty: make([]int, len(ids))}
 				if typ.Valid {
 					t := typ.String
 					row.Type = &t

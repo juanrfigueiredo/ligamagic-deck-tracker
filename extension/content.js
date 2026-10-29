@@ -15,12 +15,6 @@
     return Number.isFinite(v) && v > 0 ? v : null;
   };
 
-  // Custo de mana convertido da linha. null quando não dá para ler.
-  // TODO: implementar quando soubermos como a LigaMagic marca os símbolos de mana na linha.
-  function cmcOf(line) {
-    return null;
-  }
-
   function parseDeck() {
     const root = document.getElementById(`dk-val-1-${deckId}`);
     const blocks = root ? root.querySelectorAll(":scope > div.pdeck-block") : document.querySelectorAll("div.pdeck-block");
@@ -51,7 +45,7 @@
         const key = link.dataset.lcId ? String(link.dataset.lcId) : "n:" + name;
         const price = (i) => cents(line.querySelector(`.pdeck_preco_${i}_${deckId}`)?.textContent);
         cards.push({ key, name, board, qty: parseInt(qtyEl.textContent, 10) || 1, min: price(2), avg: price(3), max: price(4),
-                     type: board === "main" ? group : null, cmc: cmcOf(line) });
+                     type: board === "main" ? group : null });
       }
     }
     const name = document.title.split(" - Deck Magic")[0].trim();
